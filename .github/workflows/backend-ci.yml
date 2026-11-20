@@ -26,6 +26,12 @@ jobs:
           node-version: '22'
       - name: Install isolated backend dependencies (lockfile pending coordination)
         run: npm install --no-audit --no-fund
+      - name: Temporary lockfile capture for deterministic dependency setup
+        run: |
+          echo 'ST15_LOCKFILE_BEGIN'
+          base64 -w0 package-lock.json
+          echo
+          echo 'ST15_LOCKFILE_END'
       - run: npm run build
       - run: npm test
       - name: Migration and synthetic seed
