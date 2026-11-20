@@ -1,0 +1,46 @@
+name: ST-15 Backend
+on:
+  pull_request:
+    paths:
+      - 'apps/api/**'
+      - '.github/workflows/backend-ci.yml'
+  push:
+    branches: [develop]
+    paths:
+      - 'apps/api/**'
+      - '.github/workflows/backend-ci.yml'
+permissions:
+  contents: read
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Install isolated backend dependencies (lockfile pending coordination)
+        run: npm install --no-audit --no-fund
+      - run: npm run build
+      - run: npm test
+      - name: Migration and synthetic seed
+        run: |
+          DATABASE_FILE="$RUNNER_TEMP/st15-ci.sqlite" npm run db:migrate
+          DATABASE_FILE="$RUNNER_TEMP/st15-ci.sqlite" npm run db:seed
+      - name: Backend HTTP startup and health smoke test
+        shell: bash
+        run: |
+          DATABASE_FILE="$RUNNER_TEMP/st15-ci.sqlite" PORT=3001 npm start > "$RUNNER_TEMP/st15-server.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; cat "$RUNNER_TEMP/st15-server.log"' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3001/api/health > "$RUNNER_TEMP/st15-health.json"; then break; fi
+            sleep 1
+          done
+          test -s "$RUNNER_TEMP/st15-health.json"
+          node -e "const fs=require('node:fs'); const result=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/st15-health.json','utf8')); if(result.status!=='ok'||result.database!=='connected')process.exit(1)"
