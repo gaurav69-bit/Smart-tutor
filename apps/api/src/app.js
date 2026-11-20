@@ -5,7 +5,8 @@ import { validateRegistration, validateLogin } from '../../../week3-jahid/src/va
 export function createApp(db) {
   const app = express();
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '16kb' }));
+  // Parse valid JSON arrays/null too so validators can return their field-safe 400 response.
+  app.use(express.json({ limit: '16kb', strict: false }));
 
   app.get('/api/health', (_req, res) => {
     try {
