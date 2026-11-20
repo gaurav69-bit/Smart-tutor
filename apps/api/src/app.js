@@ -8,14 +8,19 @@ export function createApp(db) {
   // Parse valid JSON arrays/null too so validators can return their field-safe 400 response.
   app.use(express.json({ limit: '16kb', strict: false }));
 
-  app.get('/api/health', (_req, res) => {
-    try {
+  app.get('/api/health', async (_req, res) => {
+  try {
+    if (typeof db.prepare === 'function') {
       db.prepare('SELECT 1 AS ok').get();
-      res.json({ status: 'ok', database: 'connected' });
-    } catch {
-      res.status(503).json({ status: 'degraded', database: 'unavailable' });
+    } else {
+      await db.raw('SELECT 1 AS ok');
     }
-  });
+
+    res.json({ status: 'ok', database: 'connected' });
+  } catch {
+    res.status(503).json({ status: 'degraded', database: 'unavailable' });
+  }
+});
 
   // Demo-only routes: validate submitted formats; never create accounts or sessions.
   const validationResponse = (validate) => (req, res) => {
