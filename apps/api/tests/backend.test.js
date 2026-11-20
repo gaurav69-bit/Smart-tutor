@@ -100,3 +100,80 @@ test('Jahid validation handlers run through Express and do not persist users', a
   });
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 0);
 });
+
+test('Express validation routes reject edge cases safely without changing persisted data', async (t) => {
+  const db = openDatabase(':memory:');
+  migrate(db);
+  seed(db);
+  const before = db.prepare('SELECT id, name, email, role, created_at FROM users ORDER BY id').all();
+  const server = createApp(db).listen(0);
+  await once(server, 'listening');
+  t.after(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    db.close();
+  });
+
+  const base = 'http://127.0.0.1:' + server.address().port;
+  const register = '/api/sample/register-validation';
+  const login = '/api/sample/login-validation';
+  const secret = 'not-a-real-credential-NEVER-ECHO-123';
+  const request = (path, body) => fetch(base + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const checkValidationError = async (response, expectedDetails) => {
+    assert.equal(response.status, 400);
+    const raw = await response.text();
+    assert.equal(raw.includes(secret), false, 'The response must never echo a password');
+    assert.deepEqual(JSON.parse(raw), {
+      error: { code: 'VALIDATION_ERROR', message: 'Invalid input', details: expectedDetails }
+    });
+  };
+
+  await checkValidationError(await request(register, {}), {
+    name: 'Name must be 1-100 characters',
+    email: 'Valid email required',
+    password: 'Password must be 8-128 characters',
+    role: 'Role must be student or tutor'
+  });
+  await checkValidationError(await request(login, {}), {
+    email: 'Valid email required', password: 'Password required'
+  });
+
+  await checkValidationError(await request(register, {
+    name: 'Example Student', email: 'student@example.test', password: secret, role: 'admin'
+  }), { role: 'Role must be student or tutor' });
+
+  // Jahid's original validators reject both arrays and JSON null as non-object bodies.
+  for (const body of [[], null]) {
+    await checkValidationError(await request(register, body), { body: 'Expected an object' });
+    await checkValidationError(await request(login, body), { body: 'Expected an object' });
+  }
+
+  const tooLarge = await request(register, {
+    name: 'Example Student', email: 'student@example.test', password: secret,
+    role: 'student', padding: 'x'.repeat(17 * 1024)
+  });
+  assert.equal(tooLarge.status, 413);
+  const largeText = await tooLarge.text();
+  assert.equal(largeText.includes(secret), false, 'Oversized input must not be reflected');
+  assert.deepEqual(JSON.parse(largeText), {
+    error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request body too large' }
+  });
+
+  const successful = await request(register, {
+    name: 'Another Example', email: 'another@example.test', password: secret, role: 'tutor'
+  });
+  assert.equal(successful.status, 200);
+  const successBody = await successful.text();
+  assert.equal(successBody.includes(secret), false, 'Successful validation must not echo a password');
+  assert.deepEqual(JSON.parse(successBody), {
+    valid: true, message: 'Input format accepted; no account created'
+  });
+  assert.deepEqual(
+    db.prepare('SELECT id, name, email, role, created_at FROM users ORDER BY id').all(),
+    before,
+    'Validation-only routes must not insert, update or delete existing users'
+  );
+});
