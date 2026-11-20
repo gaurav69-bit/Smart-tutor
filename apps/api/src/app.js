@@ -1,4 +1,6 @@
 import express from 'express';
+// Reuse Jahid Hasan's validation-only functions; do not start his standalone HTTP server.
+import { validateRegistration, validateLogin } from '../../../week3-jahid/src/validation.js';
 
 export function createApp(db) {
   const app = express();
@@ -13,6 +15,19 @@ export function createApp(db) {
       res.status(503).json({ status: 'degraded', database: 'unavailable' });
     }
   });
+
+  // Demo-only routes: validate submitted formats; never create accounts or sessions.
+  const validationResponse = (validate) => (req, res) => {
+    const result = validate(req.body);
+    if (!result.valid) {
+      return res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid input', details: result.errors }
+      });
+    }
+    return res.json({ valid: true, message: 'Input format accepted; no account created' });
+  };
+  app.post('/api/sample/register-validation', validationResponse(validateRegistration));
+  app.post('/api/sample/login-validation', validationResponse(validateLogin));
 
   app.use((_req, res) => res.status(404).json({
     error: { code: 'NOT_FOUND', message: 'Route not found' }

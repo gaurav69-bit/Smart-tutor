@@ -46,3 +46,57 @@ test('health and API error responses', async (t) => {
   assert.equal(malformed.status, 400);
   assert.deepEqual(await malformed.json(), { error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } });
 });
+
+test('Jahid validation handlers run through Express and do not persist users', async (t) => {
+  const db = openDatabase(':memory:');
+  migrate(db);
+  const server = createApp(db).listen(0);
+  await once(server, 'listening');
+  t.after(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    db.close();
+  });
+  const base = 'http://127.0.0.1:' + server.address().port;
+  const post = (path, data) => fetch(base + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  const goodRegistration = { name: 'Example Student', email: 'student@example.test', password: 'SafePassword123', role: 'student' };
+  const registered = await post('/api/sample/register-validation', goodRegistration);
+  assert.equal(registered.status, 200);
+  assert.deepEqual(await registered.json(), { valid: true, message: 'Input format accepted; no account created' });
+
+  const invalid = await post('/api/sample/register-validation', { ...goodRegistration, email: 'bad-email' });
+  assert.equal(invalid.status, 400);
+  assert.deepEqual(await invalid.json(), {
+    error: { code: 'VALIDATION_ERROR', message: 'Invalid input', details: { email: 'Valid email required' } }
+  });
+
+  const validLogin = await post('/api/sample/login-validation', { email: 'student@example.test', password: 'anything' });
+  assert.equal(validLogin.status, 200);
+  assert.deepEqual(await validLogin.json(), { valid: true, message: 'Input format accepted; no account created' });
+
+  const invalidLogin = await post('/api/sample/login-validation', { email: 'not-an-email', password: '' });
+  assert.equal(invalidLogin.status, 400);
+  assert.deepEqual(await invalidLogin.json(), {
+    error: { code: 'VALIDATION_ERROR', message: 'Invalid input', details: {
+      email: 'Valid email required', password: 'Password required'
+    } }
+  });
+
+  const malformed = await fetch(base + '/api/sample/register-validation', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"broken":'
+  });
+  assert.equal(malformed.status, 400);
+  assert.deepEqual(await malformed.json(), {
+    error: { code: 'INVALID_JSON', message: 'Invalid JSON body' }
+  });
+
+  const missingRoute = await post('/api/sample/unknown', {});
+  assert.equal(missingRoute.status, 404);
+  assert.deepEqual(await missingRoute.json(), {
+    error: { code: 'NOT_FOUND', message: 'Route not found' }
+  });
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 0);
+});
