@@ -6,7 +6,7 @@ import {
   createAccount, findAccountByEmail, findAccountCredentials, updateAccountProfile,
   storeEmailVerification, storeAuthToken, createSession, enqueueEmail,
   getPendingEmails, markEmailSent, setAccountApproval, markEmailVerified,
-  createOtpChallenge, recordEmailDeliveryAttempt
+  createOtpChallenge, fingerprintOtp, recordEmailDeliveryAttempt
 } from '../src/account-store.js';
 
 function dbForTest() {
@@ -97,15 +97,24 @@ test('approval, verification, OTP and email attempt audit are independent', asyn
     row = await db('users').where({ id: account.id }).first();
     assert.equal(row.role, 'student');
     assert.equal(row.approval_status, 'approved');
+    assert.equal((await findAccountByEmail(db, 'pending@example.test')).approval_status, 'approved');
+    assert.ok((await findAccountByEmail(db, 'pending@example.test')).email_verified_at);
     assert.ok(row.email_verified_at);
     await assert.rejects(setAccountApproval(db, account.id, 'verified'));
+    const hashSecret = 'synthetic-test-only-secret-longer-than-32-characters';
+    await assert.rejects(createOtpChallenge(db, {
+      userId: account.id, purpose: 'login', code: '123456',
+      expiresAt: new Date(Date.now() + 300000)
+    }), /OTP hash secret/);
     await createOtpChallenge(db, {
-      userId: account.id, purpose: 'login', code: 'synthetic-otp-secret',
+      userId: account.id, purpose: 'login', code: '123456', hashSecret,
       expiresAt: new Date(Date.now() + 300000)
     });
     const otp = await db('otp_challenges').first();
     assert.equal(otp.challenge_hash.length, 64);
-    assert.notEqual(otp.challenge_hash, 'synthetic-otp-secret');
+    assert.notEqual(otp.challenge_hash, '123456');
+    assert.equal(otp.challenge_hash, fingerprintOtp('123456', hashSecret));
+    assert.notEqual(otp.challenge_hash, fingerprintOtp('123456', 'different-test-only-secret-longer-than-32-characters'));
     const outboxId = await enqueueEmail(db, {
       userId: account.id, recipient: 'pending@example.test',
       subject: 'Synthetic', body: 'A test body'
