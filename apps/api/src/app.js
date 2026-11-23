@@ -1,8 +1,9 @@
 import express from 'express';
+import { registrationHandler } from './auth/registration-handler.js';
 // Reuse Jahid Hasan's validation-only functions; do not start his standalone HTTP server.
 import { validateRegistration, validateLogin } from '../../../week3-jahid/src/validation.js';
 
-export function createApp(db) {
+export function createApp(db, { registerAccount, validateProfileAndConsent } = {}) {
   const app = express();
   app.disable('x-powered-by');
   // Parse valid JSON arrays/null too so validators can return their field-safe 400 response.
@@ -27,6 +28,9 @@ export function createApp(db) {
     }
     return res.json({ valid: true, message: 'Input format accepted; no account created' });
   };
+  // Real registration route: persistence must be injected from ST-106.
+  // Until then a valid request gets explicit 503, never a false success.
+  app.post('/api/auth/register', registrationHandler(registerAccount, validateProfileAndConsent));
   app.post('/api/sample/register-validation', validationResponse(validateRegistration));
   app.post('/api/sample/login-validation', validationResponse(validateLogin));
 
@@ -44,7 +48,8 @@ export function createApp(db) {
     if (err.status >= 400 && err.status < 500) {
       return res.status(err.status).json({ error: { code: 'BAD_REQUEST', message: 'Invalid request' } });
     }
-    console.error('Unhandled API error:', err);
+    // Never log raw adapter exceptions: they may contain credentials.
+    console.error('Unhandled API error');
     return res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Unexpected server error' } });
   });
   return app;
