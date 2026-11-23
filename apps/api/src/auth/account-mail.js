@@ -20,7 +20,7 @@ export function verificationEmail(email, verificationUrl) {
 }
 
 export function welcomeEmail(email) {
-  const message = 'Your email is verified. You can now sign in to Smart Tutor.';
+  const message = 'Your email is verified. Thanks for joining Smart Tutor.';
   return {
     to: email,
     subject: 'Welcome to Smart Tutor',
