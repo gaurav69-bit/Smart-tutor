@@ -39,3 +39,17 @@ test('ST-71: invalid session parameters cannot create a token', () => {
   assert.throws(() => createSessionToken({ now: Number.MAX_SAFE_INTEGER }), RangeError);
   assert.throws(() => hashSessionToken('invalid'), TypeError);
 });
+
+test('ST-71: production session cookies always include Secure flag', () => {
+  const previous = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = 'production';
+    assert.equal(sessionCookieOptions().secure, true);
+    assert.equal(sessionCookieOptions().httpOnly, true);
+    process.env.NODE_ENV = 'development';
+    assert.equal(sessionCookieOptions().secure, false);
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previous;
+  }
+});
