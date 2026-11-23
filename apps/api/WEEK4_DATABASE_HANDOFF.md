@@ -13,6 +13,7 @@ From `apps/api`: run `npm run db:migrate` with `DB_CLIENT=mysql2` in the local `
 
 - `001_initial_schema` creates `users`.
 - `002_account_identity_and_outbox` creates `account_profiles`, `account_secrets`, `email_verifications`, `sessions`, `auth_tokens`, and `email_outbox`.
+- `003_account_states_and_delivery_audit` adds independent `users.approval_status` (pending/approved/rejected) and `users.email_verified_at`, plus `otp_challenges` and `email_delivery_attempts`.
 - Applied migration names are recorded in `schema_migrations`. Re-running completed migrations makes no changes. If expected tables are missing or appear without a recorded migration, the runner stops rather than silently overwriting them.
 - Do not use `db:seed` with MySQL: its current seed script is specifically for SQLite's synthetic development data.
 
@@ -25,6 +26,7 @@ Import from `apps/api/src/account-store.js`:
 - `updateAccountProfile(db, userId, {bio})`.
 - `storeEmailVerification(db, {userId, token, expiresAt})`, `storeAuthToken(db, {userId, purpose, token, expiresAt})`, `createSession(db, {id, userId, expiresAt})`.
 - `enqueueEmail(db, {userId?, recipient, subject, body})`, `getPendingEmails(db, limit?)`, `markEmailSent(db, id)`.
+- `setAccountApproval(db, userId, status)`, `markEmailVerified(db, userId)`, `createOtpChallenge(db, {userId, purpose, code, expiresAt})`, and `recordEmailDeliveryAttempt(db, {outboxId, delivered, providerMessageId?, errorSummary?})`. The latter records a delivery attempt and updates the outbox in one transaction.
 
 Token functions hash the tokens before persisting them. Callers must create cryptographically unpredictable tokens and enforce expiry, one-time use, rate limits and session revocation. Email sending is **not** implemented here: the outbox records pending email only. Plan and confirm the registration/verification/login route contract with Jahid before changing endpoints.
 
