@@ -1,0 +1,44 @@
+import { validateRegistration } from '../../../../week3-jahid/src/validation.js';
+import { prepareRegistration } from './registration.js';
+
+// Transport layer only. The persistence implementation is owned by ST-106.
+// A configured registerAccount must atomically persist the account and enforce uniqueness.
+export function registrationHandler(registerAccount) {
+  return async (req, res) => {
+    const validation = validateRegistration(req.body);
+    if (!validation.valid) {
+      return res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid input', details: validation.errors }
+      });
+    }
+
+    if (typeof registerAccount !== 'function') {
+      return res.status(503).json({
+        error: { code: 'REGISTRATION_UNAVAILABLE', message: 'Registration is not yet available' }
+      });
+    }
+
+    try {
+      const prepared = await prepareRegistration(req.body);
+      const account = await registerAccount(prepared.account);
+      // Never return the internal password hash or any security token.
+      return res.status(201).json({
+        account: {
+          id: account.id,
+          name: account.name,
+          email: account.email,
+          role: account.role,
+          verified: false
+        }
+      });
+    } catch (err) {
+      if (err?.code === 'DUPLICATE_EMAIL' || err?.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+        return res.status(409).json({
+          error: { code: 'DUPLICATE_EMAIL', message: 'Email already registered' }
+        });
+      }
+      // Let the existing Express error handler return a generic safe error.
+      throw err;
+    }
+  };
+}
