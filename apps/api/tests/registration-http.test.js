@@ -110,3 +110,20 @@ test('ST-69: missing consent blocks persistence through the injected contract', 
   });
   assert.equal(calls, 0);
 });
+
+
+test('ST-69: persistence receives only validated profile fields, never raw password', async (t) => {
+  let capturedProfile;
+  const { url } = await withServer(t,
+    async (account, profile) => {
+      capturedProfile = profile;
+      return { id: 12, name: account.name, email: account.email, role: account.role };
+    },
+    () => ({ valid: true, profile: { subject: 'mathematics', acceptedTerms: true } })
+  );
+  const response = await post(url, { ...valid, password: 'HiddenPassword123', extra: 'untrusted' });
+  assert.equal(response.status, 201);
+  assert.deepEqual(capturedProfile, { subject: 'mathematics', acceptedTerms: true });
+  assert.equal(Object.hasOwn(capturedProfile, 'password'), false);
+  assert.equal(Object.hasOwn(capturedProfile, 'extra'), false);
+});
