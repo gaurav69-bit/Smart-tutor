@@ -1,6 +1,6 @@
 // Persistence layer only. HTTP authentication and email delivery are owned by
 // the relevant integration work; never store raw passwords or raw tokens.
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 
 const digest = (value) => createHash('sha256').update(value).digest('hex');
 
@@ -37,7 +37,8 @@ export async function createAccount(db, { name, email, role, passwordHash, bio =
 export async function findAccountByEmail(db, email) {
   const user = await db('users')
     .leftJoin('account_profiles', 'users.id', 'account_profiles.user_id')
-    .select('users.id', 'users.name', 'users.email', 'users.role', 'account_profiles.bio')
+    .select('users.id', 'users.name', 'users.email', 'users.role',
+      'users.approval_status', 'users.email_verified_at', 'account_profiles.bio')
     .where('users.email', normalizedEmail(email)).first();
   return user || null;
 }
@@ -106,11 +107,22 @@ export async function markEmailVerified(db, userId) {
     .update({ email_verified_at: db.fn.now() })) > 0;
 }
 
-export async function createOtpChallenge(db, { userId, purpose, code, expiresAt }) {
+// OTPs are often only 6 digits. A plain SHA-256 digest could be guessed offline.
+// Key the fingerprint with an application secret stored outside Git and the DB.
+export function fingerprintOtp(code, hashSecret) {
+  code = nonempty(code, 'code');
+  if (typeof hashSecret !== 'string' || hashSecret.length < 32) {
+    throw new TypeError('OTP hash secret must contain at least 32 characters');
+  }
+  return createHmac('sha256', hashSecret).update(code).digest('hex');
+}
+
+export async function createOtpChallenge(db, { userId, purpose, code, expiresAt, hashSecret }) {
+  const challengeHash = fingerprintOtp(code, hashSecret);
   return db('otp_challenges').insert({
     user_id: userId,
     purpose: nonempty(purpose, 'purpose'),
-    challenge_hash: digest(nonempty(code, 'code')),
+    challenge_hash: challengeHash,
     expires_at: expiresAt
   });
 }
