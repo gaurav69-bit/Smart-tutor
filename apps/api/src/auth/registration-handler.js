@@ -20,7 +20,9 @@ export function registrationHandler(registerAccount, validateProfileAndConsent) 
       });
     }
 
-    const profileValidation = validateProfileAndConsent(req.body);
+    // Validation implementations may be asynchronous (for example, when
+    // checking agreed role-specific rules). Always await before persistence.
+    const profileValidation = await validateProfileAndConsent(req.body);
     if (!profileValidation?.valid) {
       return res.status(400).json({
         error: {
@@ -36,6 +38,9 @@ export function registrationHandler(registerAccount, validateProfileAndConsent) 
       // Only pass validated, explicitly selected profile values to persistence.
       // Never forward the raw request, which contains the plaintext password.
       const account = await registerAccount(prepared.account, profileValidation.profile ?? {});
+      if (!account || !account.id) {
+        throw new Error('Registration persistence did not return an account identifier');
+      }
       // Never return the internal password hash or any security token.
       return res.status(201).json({
         account: {
