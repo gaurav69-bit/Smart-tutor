@@ -92,3 +92,50 @@ export async function markEmailSent(db, id) {
   return db('email_outbox').where({ id, status: 'pending' })
     .update({ status: 'sent', sent_at: db.fn.now() });
 }
+
+
+export async function setAccountApproval(db, userId, status) {
+  if (!['pending', 'approved', 'rejected'].includes(status)) {
+    throw new TypeError('Invalid approval status');
+  }
+  return (await db('users').where({ id: userId }).update({ approval_status: status })) > 0;
+}
+
+export async function markEmailVerified(db, userId) {
+  return (await db('users').where({ id: userId, email_verified_at: null })
+    .update({ email_verified_at: db.fn.now() })) > 0;
+}
+
+export async function createOtpChallenge(db, { userId, purpose, code, expiresAt }) {
+  return db('otp_challenges').insert({
+    user_id: userId,
+    purpose: nonempty(purpose, 'purpose'),
+    challenge_hash: digest(nonempty(code, 'code')),
+    expires_at: expiresAt
+  });
+}
+
+// Records a provider attempt and updates its outbox item in one transaction.
+// Caller supplies a redacted errorSummary; never store API keys or credentials.
+export async function recordEmailDeliveryAttempt(db, {
+  outboxId, delivered, providerMessageId = null, errorSummary = null
+}) {
+  if (typeof delivered !== 'boolean') throw new TypeError('delivered must be boolean');
+  return db.transaction(async (trx) => {
+    const changed = await trx('email_outbox')
+      .where({ id: outboxId, status: 'pending' })
+      .update({
+        status: delivered ? 'sent' : 'pending',
+        sent_at: delivered ? trx.fn.now() : null,
+        attempts: trx.raw('attempts + 1')
+      });
+    if (!changed) return false;
+    await trx('email_delivery_attempts').insert({
+      email_outbox_id: outboxId,
+      outcome: delivered ? 'sent' : 'failed',
+      provider_message_id: providerMessageId,
+      error_summary: errorSummary
+    });
+    return true;
+  });
+}
