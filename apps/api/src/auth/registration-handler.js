@@ -33,7 +33,9 @@ export function registrationHandler(registerAccount, validateProfileAndConsent) 
 
     try {
       const prepared = await prepareRegistration(req.body);
-      const account = await registerAccount(prepared.account, req.body);
+      // Only pass validated, explicitly selected profile values to persistence.
+      // Never forward the raw request, which contains the plaintext password.
+      const account = await registerAccount(prepared.account, profileValidation.profile ?? {});
       // Never return the internal password hash or any security token.
       return res.status(201).json({
         account: {
