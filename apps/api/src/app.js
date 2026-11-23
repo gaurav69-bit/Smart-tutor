@@ -49,7 +49,8 @@ export function createApp(db, { consumeVerificationToken, queueVerificationResen
     if (err.status >= 400 && err.status < 500) {
       return res.status(err.status).json({ error: { code: 'BAD_REQUEST', message: 'Invalid request' } });
     }
-    console.error('Unhandled API error:', err);
+    // Never log raw adapter exceptions: they may contain credentials.
+    console.error('Unhandled API error');
     return res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Unexpected server error' } });
   });
   return app;
