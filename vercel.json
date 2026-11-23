@@ -1,6 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
+  "git": {
+    "deploymentEnabled": {
+      "integration/week-4-auth": false
+    }
+  },
   "installCommand": "npm ci && npm ci --prefix apps/api",
   "buildCommand": "VITE_API_MODE=live npm run build",
   "outputDirectory": "dist",
