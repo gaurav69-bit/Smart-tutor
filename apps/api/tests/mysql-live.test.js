@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { once } from 'node:events';
+import { createApp } from '../src/app.js';
 import { createDatabaseConnection } from '../src/database-connection.js';
 import { migrateMySQL } from '../src/mysql-migrations.js';
 import {
@@ -18,6 +20,16 @@ test('real MySQL: migrations, duplicate emails, transactional rollback and persi
     const applied = await migrateMySQL(db);
     assert.deepEqual(applied, ['001_initial_schema', '002_account_identity_and_outbox', '003_account_states_and_delivery_audit']);
     assert.deepEqual(await migrateMySQL(db), []);
+    // Exercise the running Express health route against the actual MySQL connection.
+    const server = createApp(db).listen(0, '127.0.0.1');
+    try {
+      await once(server, 'listening');
+      const response = await fetch('http://127.0.0.1:' + server.address().port + '/api/health');
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), { status: 'ok', database: 'connected' });
+    } finally {
+      await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
     const account = await createAccount(db, {
       name: 'MySQL Example', email: 'mysql@example.test', role: 'student',
       passwordHash: 'argon2id$synthetic-ci-only'
