@@ -10,9 +10,14 @@ export function getDatabaseConfig(env = process.env) {
         user: env.DB_USER,
         password: env.DB_PASSWORD,
         database: env.DB_NAME,
-        ssl: env.DB_SSL_CA
-          ? { ca: env.DB_SSL_CA.replace(/\\n/g, '\n') }
-          : { rejectUnauthorized: true },
+        ssl: env.DB_SSL === 'false'
+          ? undefined
+          : env.DB_SSL_CA
+            ? {
+                ca: env.DB_SSL_CA.replace(/\\n/g, '\n'),
+                rejectUnauthorized: true,
+              }
+            : { rejectUnauthorized: true },
       },
       pool: { min: 0, max: 10 },
     };
