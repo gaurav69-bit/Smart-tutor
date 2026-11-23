@@ -5,7 +5,8 @@ import { migrateMySQL } from '../src/mysql-migrations.js';
 import {
   createAccount, findAccountByEmail, findAccountCredentials, updateAccountProfile,
   storeEmailVerification, storeAuthToken, createSession, enqueueEmail,
-  getPendingEmails, markEmailSent
+  getPendingEmails, markEmailSent, setAccountApproval, markEmailVerified,
+  createOtpChallenge, recordEmailDeliveryAttempt
 } from '../src/account-store.js';
 
 function dbForTest() {
@@ -75,4 +76,53 @@ test('verification, sessions, hashed tokens and email outbox store synthetic rec
     assert.equal(await markEmailSent(db, id), 1);
     assert.equal((await getPendingEmails(db)).length, 0);
   } finally { await db.destroy(); }
+});
+
+
+test('approval, verification, OTP and email attempt audit are independent', async () => {
+  const db = dbForTest();
+  try {
+    await migrateMySQL(db);
+    const account = await createAccount(db, {
+      name: 'Pending Student', email: 'pending@example.test', role: 'student',
+      passwordHash: 'argon2id$synthetic'
+    });
+    let row = await db('users').where({ id: account.id }).first();
+    assert.equal(row.role, 'student');
+    assert.equal(row.approval_status, 'pending');
+    assert.equal(row.email_verified_at, null);
+    assert.equal(await setAccountApproval(db, account.id, 'approved'), true);
+    assert.equal(await markEmailVerified(db, account.id), true);
+    assert.equal(await markEmailVerified(db, account.id), false);
+    row = await db('users').where({ id: account.id }).first();
+    assert.equal(row.role, 'student');
+    assert.equal(row.approval_status, 'approved');
+    assert.ok(row.email_verified_at);
+    await assert.rejects(setAccountApproval(db, account.id, 'verified'));
+    await createOtpChallenge(db, {
+      userId: account.id, purpose: 'login', code: 'synthetic-otp-secret',
+      expiresAt: new Date(Date.now() + 300000)
+    });
+    const otp = await db('otp_challenges').first();
+    assert.equal(otp.challenge_hash.length, 64);
+    assert.notEqual(otp.challenge_hash, 'synthetic-otp-secret');
+    const outboxId = await enqueueEmail(db, {
+      userId: account.id, recipient: 'pending@example.test',
+      subject: 'Synthetic', body: 'A test body'
+    });
+    assert.equal(await recordEmailDeliveryAttempt(db, {
+      outboxId, delivered: false, errorSummary: 'Temporary test failure'
+    }), true);
+    assert.equal(await recordEmailDeliveryAttempt(db, {
+      outboxId, delivered: true, providerMessageId: 'test-id'
+    }), true);
+    assert.equal(await recordEmailDeliveryAttempt(db, { outboxId, delivered: true }), false);
+    const attempts = await db('email_delivery_attempts').orderBy('id');
+    assert.deepEqual(attempts.map((attempt) => attempt.outcome), ['failed', 'sent']);
+    const mail = await db('email_outbox').where({ id: outboxId }).first();
+    assert.equal(mail.status, 'sent');
+    assert.equal(mail.attempts, 2);
+  } finally {
+    await db.destroy();
+  }
 });
