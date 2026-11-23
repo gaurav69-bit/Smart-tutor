@@ -1,8 +1,9 @@
 import express from 'express';
+import { loginHandler, logoutHandler } from './auth/session-handler.js';
 // Reuse Jahid Hasan's validation-only functions; do not start his standalone HTTP server.
 import { validateRegistration, validateLogin } from '../../../week3-jahid/src/validation.js';
 
-export function createApp(db) {
+export function createApp(db, { authenticatePassword, persistSession, revokeSession } = {}) {
   const app = express();
   app.disable('x-powered-by');
   // Parse valid JSON arrays/null too so validators can return their field-safe 400 response.
@@ -16,6 +17,9 @@ export function createApp(db) {
       res.status(503).json({ status: 'degraded', database: 'unavailable' });
     }
   });
+
+  app.post('/api/auth/login', loginHandler({ authenticatePassword, persistSession }));
+  app.post('/api/auth/logout', logoutHandler({ revokeSession }));
 
   // Demo-only routes: validate submitted formats; never create accounts or sessions.
   const validationResponse = (validate) => (req, res) => {
