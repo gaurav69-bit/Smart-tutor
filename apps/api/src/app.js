@@ -1,8 +1,10 @@
 import express from 'express';
+import { verificationHandler } from './auth/verification-handler.js';
+import { resendVerificationHandler } from './auth/verification-resend-handler.js';
 // Reuse Jahid Hasan's validation-only functions; do not start his standalone HTTP server.
 import { validateRegistration, validateLogin } from '../../../week3-jahid/src/validation.js';
 
-export function createApp(db) {
+export function createApp(db, { consumeVerificationToken, queueVerificationResend } = {}) {
   const app = express();
   app.disable('x-powered-by');
   // Parse valid JSON arrays/null too so validators can return their field-safe 400 response.
@@ -16,6 +18,9 @@ export function createApp(db) {
       res.status(503).json({ status: 'degraded', database: 'unavailable' });
     }
   });
+
+  app.post('/api/auth/verify-email', verificationHandler(consumeVerificationToken));
+  app.post('/api/auth/resend-verification', resendVerificationHandler(queueVerificationResend));
 
   // Demo-only routes: validate submitted formats; never create accounts or sessions.
   const validationResponse = (validate) => (req, res) => {
@@ -44,7 +49,8 @@ export function createApp(db) {
     if (err.status >= 400 && err.status < 500) {
       return res.status(err.status).json({ error: { code: 'BAD_REQUEST', message: 'Invalid request' } });
     }
-    console.error('Unhandled API error:', err);
+    // Never log raw adapter exceptions: they may contain credentials.
+    console.error('Unhandled API error');
     return res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Unexpected server error' } });
   });
   return app;
