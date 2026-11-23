@@ -69,6 +69,39 @@ const migrations = [
         table.index(['status', 'created_at']);
       });
     }
+  },
+  {
+    name: '003_account_states_and_delivery_audit',
+    tables: ['otp_challenges', 'email_delivery_attempts'],
+    async up(db) {
+      // Keep role, approval, and verification as independent dimensions.
+      await db.schema.alterTable('users', (table) => {
+        table.string('approval_status', 20).notNullable().defaultTo('pending');
+        table.timestamp('email_verified_at').nullable();
+      });
+      await db.schema.createTable('otp_challenges', (table) => {
+        table.increments('id').primary();
+        table.integer('user_id').unsigned().notNullable()
+          .references('id').inTable('users').onDelete('CASCADE');
+        table.string('purpose', 40).notNullable();
+        table.string('challenge_hash', 64).notNullable().unique();
+        table.timestamp('expires_at').notNullable();
+        table.timestamp('consumed_at').nullable();
+        table.integer('attempt_count').unsigned().notNullable().defaultTo(0);
+        table.timestamp('created_at').notNullable().defaultTo(db.fn.now());
+        table.index(['user_id', 'purpose']);
+      });
+      await db.schema.createTable('email_delivery_attempts', (table) => {
+        table.increments('id').primary();
+        table.integer('email_outbox_id').unsigned().notNullable()
+          .references('id').inTable('email_outbox').onDelete('CASCADE');
+        table.string('outcome', 20).notNullable();
+        table.string('provider_message_id', 255).nullable();
+        table.text('error_summary').nullable();
+        table.timestamp('attempted_at').notNullable().defaultTo(db.fn.now());
+        table.index('email_outbox_id');
+      });
+    }
   }
 ];
 
@@ -93,6 +126,14 @@ export async function migrateMySQL(db) {
         throw new Error('Migration recorded but expected tables are missing: ' + migration.name);
       }
       continue;
+    }
+    // A partially applied migration must be reviewed manually; never overwrite it.
+    if (migration.name === '003_account_states_and_delivery_audit' && !record) {
+      const hasApproval = await db.schema.hasColumn('users', 'approval_status');
+      const hasVerified = await db.schema.hasColumn('users', 'email_verified_at');
+      if (hasApproval || hasVerified) {
+        throw new Error('Migration 003 has existing untracked account state columns');
+      }
     }
     // Do not adopt or overwrite tables that the migration did not create.
     if (existing.length) {
