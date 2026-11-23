@@ -24,8 +24,10 @@ test('Migration creates required tables', async () => {
       await db.schema.hasTable('schema_migrations'),
       true
     );
-    assert.deepEqual(result, ['001_initial_schema', '002_account_identity_and_outbox']);
-    for (const table of ['account_profiles', 'account_secrets', 'email_verifications', 'sessions', 'auth_tokens', 'email_outbox']) {
+    assert.deepEqual(result, ['001_initial_schema', '002_account_identity_and_outbox', '003_account_states_and_delivery_audit']);
+    assert.equal(await db.schema.hasColumn('users', 'approval_status'), true);
+    assert.equal(await db.schema.hasColumn('users', 'email_verified_at'), true);
+    for (const table of ['account_profiles', 'account_secrets', 'email_verifications', 'sessions', 'auth_tokens', 'email_outbox', 'otp_challenges', 'email_delivery_attempts']) {
       assert.equal(await db.schema.hasTable(table), true);
     }
 
