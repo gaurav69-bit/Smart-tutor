@@ -24,7 +24,10 @@ test('Migration creates required tables', async () => {
       await db.schema.hasTable('schema_migrations'),
       true
     );
-    assert.deepEqual(result, ['001_initial_schema']);
+    assert.deepEqual(result, ['001_initial_schema', '002_account_identity_and_outbox']);
+    for (const table of ['account_profiles', 'account_secrets', 'email_verifications', 'sessions', 'auth_tokens', 'email_outbox']) {
+      assert.equal(await db.schema.hasTable(table), true);
+    }
 
     console.log('Migration creation: PASSED');
   } finally {
@@ -63,7 +66,7 @@ test('Migration protects existing untracked tables', async () => {
 
     await assert.rejects(
       migrateMySQL(db),
-      /Users table already exists/
+      /existing untracked tables/
     );
 
     assert.equal(await db.schema.hasTable('users'), true);
