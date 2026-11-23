@@ -3,7 +3,7 @@ import { prepareRegistration } from './registration.js';
 
 // Transport layer only. The persistence implementation is owned by ST-106.
 // A configured registerAccount must atomically persist the account and enforce uniqueness.
-export function registrationHandler(registerAccount) {
+export function registrationHandler(registerAccount, validateProfileAndConsent) {
   return async (req, res) => {
     const validation = validateRegistration(req.body);
     if (!validation.valid) {
@@ -12,15 +12,28 @@ export function registrationHandler(registerAccount) {
       });
     }
 
-    if (typeof registerAccount !== 'function') {
+    // Do not accept an account until the role-specific profile and consent
+    // contract is supplied by the registration/API owners.
+    if (typeof registerAccount !== 'function' || typeof validateProfileAndConsent !== 'function') {
       return res.status(503).json({
         error: { code: 'REGISTRATION_UNAVAILABLE', message: 'Registration is not yet available' }
       });
     }
 
+    const profileValidation = validateProfileAndConsent(req.body);
+    if (!profileValidation?.valid) {
+      return res.status(400).json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid input',
+          details: profileValidation?.errors ?? { profile: 'Profile and consent required' }
+        }
+      });
+    }
+
     try {
       const prepared = await prepareRegistration(req.body);
-      const account = await registerAccount(prepared.account);
+      const account = await registerAccount(prepared.account, req.body);
       // Never return the internal password hash or any security token.
       return res.status(201).json({
         account: {
