@@ -16,7 +16,7 @@ test('real MySQL: migrations, duplicate emails, transactional rollback and persi
   const db = createDatabaseConnection();
   try {
     const applied = await migrateMySQL(db);
-    assert.deepEqual(applied, ['001_initial_schema', '002_account_identity_and_outbox']);
+    assert.deepEqual(applied, ['001_initial_schema', '002_account_identity_and_outbox', '003_account_states_and_delivery_audit']);
     assert.deepEqual(await migrateMySQL(db), []);
     const account = await createAccount(db, {
       name: 'MySQL Example', email: 'mysql@example.test', role: 'student',
