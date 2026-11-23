@@ -127,3 +127,30 @@ test('ST-69: persistence receives only validated profile fields, never raw passw
   assert.equal(Object.hasOwn(capturedProfile, 'password'), false);
   assert.equal(Object.hasOwn(capturedProfile, 'extra'), false);
 });
+
+test('ST-69: asynchronous consent rejection blocks persistence', async (t) => {
+  let persistenceCalls = 0;
+  const { url } = await withServer(
+    t,
+    async () => { persistenceCalls++; return { id: 1 }; },
+    async () => ({ valid: false, errors: { acceptedTerms: 'Consent required' } })
+  );
+  const response = await post(url, valid);
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error.code, 'VALIDATION_ERROR');
+  assert.equal(persistenceCalls, 0);
+});
+
+test('ST-69: persistence without an account id cannot claim registration succeeded', async (t) => {
+  const { url } = await withServer(t,
+    async () => ({ name: valid.name, role: 'student' }),
+    () => ({ valid: true, profile: { acceptedTerms: true } })
+  );
+  const response = await post(url, valid);
+  assert.equal(response.status, 500);
+  const raw = await response.text();
+  assert.deepEqual(JSON.parse(raw), {
+    error: { code: 'INTERNAL_ERROR', message: 'Unexpected server error' }
+  });
+  assert.equal(raw.includes(valid.password), false);
+});
