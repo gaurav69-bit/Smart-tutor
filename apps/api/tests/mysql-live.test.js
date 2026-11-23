@@ -28,6 +28,22 @@ test('real MySQL: migrations, duplicate emails, transactional rollback and persi
       passwordHash: 'synthetic-hash'
     }));
     assert.equal(Number((await db('users').count({ n: '*' }).first()).n), 1);
+    // Race two independent transactions on the same email. The database unique
+    // index must permit exactly one insert, regardless of scheduling.
+    const racers = await Promise.allSettled([
+      createAccount(db, {
+        name: 'Concurrent A', email: 'race@example.test', role: 'student',
+        passwordHash: 'argon2id$synthetic-a'
+      }),
+      createAccount(db, {
+        name: 'Concurrent B', email: 'RACE@example.test', role: 'tutor',
+        passwordHash: 'argon2id$synthetic-b'
+      })
+    ]);
+    assert.equal(racers.filter((r) => r.status === 'fulfilled').length, 1);
+    assert.equal(racers.filter((r) => r.status === 'rejected').length, 1);
+    assert.equal(Number((await db('users').where('email', 'race@example.test').count({ n: '*' }).first()).n), 1);
+    assert.equal(Number((await db('account_profiles').count({ n: '*' }).first()).n), 2);
     const id = await enqueueEmail(db, {
       userId: account.id, recipient: 'mysql@example.test',
       subject: 'Test message', body: 'Synthetic email; no delivery'
