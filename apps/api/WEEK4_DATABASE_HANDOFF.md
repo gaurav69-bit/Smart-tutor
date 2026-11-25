@@ -38,3 +38,18 @@ Token functions hash the tokens before persisting them. OTP challenges use keyed
 - Tests exercise migration replay, duplicate emails, transaction rejection, email outbox and persistence after reconnecting.
 - Hosted TiDB/TLS cannot be marked verified until Gaurav supplies the instance details and someone runs a restricted smoke test.
 - A PR targeting `develop` must receive normal team review; do not merge until CI and agreement with Jahid's authentication interfaces are complete.
+
+## ST-106 proposal for Jahid's PR #11 (not merged or wired)
+
+The file `src/auth-persistence-adapters.js` exports `createAuthPersistenceAdapters(knexDb, { verifyPassword })` with the proposed async functions:
+`registerAccount(account, validatedProfile)`, `consumeVerificationToken(tokenHash)`,
+`authenticatePassword(normalizedEmail, password)`, `persistSession({accountId,tokenHash,expiresAt})`,
+`lookupSession(tokenHash)`, and `revokeSession(tokenHash)`.
+
+- Registration translates a database duplicate-key violation into `DUPLICATE_EMAIL` and stores only validated `bio`. **The team must still approve and implement any additional role-specific profile and consent fields before production registration can be enabled.**
+- Verification consumes only valid, unexpired hashed tokens. Replay does not succeed. The user's `email_verified_at` is updated in the same transaction.
+- Login uses a caller-supplied password verification function (Jahid's scrypt implementation) and requires both verified email and `approval_status=approved`. **The team must decide whether this approval gate applies to both roles or tutors only** before wiring to Express.
+- Sessions store only the hashed opaque session token, support lookups/revocation, and reject unapproved accounts.
+- The outbox resend workflow (`queueVerificationResend`) is **not included yet**. It requires an approved resend cooldown, token/URL lifecycle, eligible account policy, durable outbox link construction and coordinated mail delivery to avoid falsely claiming a working endpoint.
+
+These are deliberately stand-alone adapters: PR #11 is owned by Jahid and remains unmerged. No code from PR #11 was copied into this branch, and `src/app.js` still exposes only the Week 3 sample validators. Automated tests cover the proposed DB interfaces against an isolated SQLite-backed Knex instance and, in CI, against a disposable real MySQL database.
