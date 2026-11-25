@@ -4,6 +4,8 @@ import { once } from 'node:events';
 import { createApp } from '../src/app.js';
 import { createDatabaseConnection } from '../src/database-connection.js';
 import { migrateMySQL } from '../src/mysql-migrations.js';
+import { createAuthPersistenceAdapters } from '../src/auth-persistence-adapters.js';
+import { createHash } from 'node:crypto';
 import {
   createAccount, findAccountByEmail, enqueueEmail, getPendingEmails
 } from '../src/account-store.js';
@@ -56,6 +58,34 @@ test('real MySQL: migrations, duplicate emails, transactional rollback and persi
     assert.equal(racers.filter((r) => r.status === 'rejected').length, 1);
     assert.equal(Number((await db('users').where('email', 'race@example.test').count({ n: '*' }).first()).n), 1);
     assert.equal(Number((await db('account_profiles').count({ n: '*' }).first()).n), 2);
+    // Test ST-106 compatibility with Jahid's injected storage interface on real MySQL.
+    const auth = createAuthPersistenceAdapters(db, {
+      verifyPassword: async (password, stored) =>
+        password === 'synthetic-password' && stored === 'scrypt:synthetic-only'
+    });
+    const integrated = await auth.registerAccount({
+      name: 'Integrated Account', email: 'integration@example.test',
+      role: 'student', passwordHash: 'scrypt:synthetic-only'
+    }, { bio: 'MySQL integration' });
+    assert.equal(await auth.authenticatePassword(integrated.email, 'synthetic-password'), null);
+    await db('users').where({ id: integrated.id }).update({ approval_status: 'approved' });
+    const tokenHash = createHash('sha256').update('synthetic-verification').digest('hex');
+    await db('email_verifications').insert({
+      user_id: integrated.id, token_hash: tokenHash,
+      expires_at: new Date(Date.now() + 60000)
+    });
+    assert.equal(await auth.consumeVerificationToken(tokenHash), true);
+    assert.equal(await auth.consumeVerificationToken(tokenHash), false);
+    assert.equal((await auth.authenticatePassword(integrated.email, 'synthetic-password')).verified, true);
+    const sessionHash = createHash('sha256').update('synthetic-session').digest('hex');
+    assert.equal(await auth.persistSession({
+      accountId: integrated.id, tokenHash: sessionHash,
+      expiresAt: Date.now() + 60000
+    }), true);
+    assert.equal((await auth.lookupSession(sessionHash)).account.email, integrated.email);
+    assert.equal(await auth.revokeSession(sessionHash), true);
+    assert.ok((await auth.lookupSession(sessionHash)).revokedAt != null);
+
     const id = await enqueueEmail(db, {
       userId: account.id, recipient: 'mysql@example.test',
       subject: 'Test message', body: 'Synthetic email; no delivery'
