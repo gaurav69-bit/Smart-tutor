@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import knex from 'knex';
 import { migrateMySQL } from '../src/mysql-migrations.js';
 import { registerWithVerificationOutbox } from '../src/registration-outbox.js';
+import { createVerificationResendAdapter } from '../src/verification-outbox-adapter.js';
 
 const makeDb = () => knex({
   client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true
@@ -84,5 +85,57 @@ test('Approval Pending ST-106: reject malformed token, past expiry and invalid r
     await assert.rejects(registerWithVerificationOutbox(db,
       { ...s, account: { ...s.account, role: 'admin' } }), /Invalid role/);
     assert.equal((await db('users').count({ n: '*' }).first()).n, 0);
+  } finally { await db.destroy(); }
+});
+
+test('Approval Pending ST-106: initial registration and subsequent resend enforce the same cooldown', async () => {
+  const db = makeDb();
+  try {
+    await migrateMySQL(db);
+    const user = await registerWithVerificationOutbox(db, sample());
+    const original = await db('email_verifications').where({ user_id: user.id }).first();
+    const initialTime = new Date(original.created_at).getTime();
+    assert.ok(Number.isFinite(initialTime));
+    const cooldownMs = 60_000;
+    let now = initialTime + 1000;
+    let generated = 0;
+    const resend = createVerificationResendAdapter(db, {
+      now: () => now,
+      tokenTtlMs: 30 * 60_000,
+      cooldownMs,
+      createToken: () => (++generated).toString(16).padStart(64, 'a'),
+      renderVerificationEmail: ({ token }) => ({
+        subject: 'Synthetic resend',
+        body: 'https://example.test/#/verify?token=' + token
+      })
+    });
+    const count = async table =>
+      Number((await db(table).where({ user_id: user.id }).count({ n: '*' }).first()).n);
+
+    // The original registration email starts the same server-side cooldown.
+    await resend(user.email);
+    assert.equal(generated, 0);
+    assert.equal(await count('email_outbox'), 1);
+
+    // After expiry, exactly one resend is queued.
+    now = initialTime + cooldownMs + 1000;
+    await resend(user.email);
+    assert.equal(generated, 1);
+    assert.equal(await count('email_verifications'), 2);
+    assert.equal(await count('email_outbox'), 2);
+
+    // A repeat must consult the resend timestamp, not the original timestamp.
+    now += 1000;
+    await resend(user.email);
+    assert.equal(generated, 1);
+    assert.equal(await count('email_verifications'), 2);
+    assert.equal(await count('email_outbox'), 2);
+
+    // Check that the cooldown really resets after the newest issuance.
+    now += cooldownMs;
+    await resend(user.email);
+    assert.equal(generated, 2);
+    assert.equal(await count('email_verifications'), 3);
+    assert.equal(await count('email_outbox'), 3);
   } finally { await db.destroy(); }
 });
