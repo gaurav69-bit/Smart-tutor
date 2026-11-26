@@ -8,6 +8,7 @@ import { createAuthPersistenceAdapters } from '../src/auth-persistence-adapters.
 import { createHash } from 'node:crypto';
 import { processPendingOutbox } from '../src/outbox-dispatcher.js';
 import { createVerificationResendAdapter } from '../src/verification-outbox-adapter.js';
+import { registerWithVerificationOutbox } from '../src/registration-outbox.js';
 import {
   createAccount, findAccountByEmail, enqueueEmail, getPendingEmails
 } from '../src/account-store.js';
@@ -131,6 +132,34 @@ test('real MySQL: migrations, duplicate emails, transactional rollback and persi
     });
     assert.equal(deliveredVerification.sent, 1);
     assert.equal((await getPendingEmails(db)).length, 0);
+    // Approval Pending: atomic initial registration and verification issuance
+    // on disposable real MySQL, with a synthetic token and no live delivery.
+    const registerToken = 'b'.repeat(64);
+    const registered = await registerWithVerificationOutbox(db, {
+      account: { name: 'Atomic Student', email: 'Atomic@Example.test',
+        role: 'student', passwordHash: 'scrypt:synthetic-only' },
+      validatedProfile: { bio: 'Synthetic MySQL account' },
+      token: registerToken, expiresAt: Date.now() + 30 * 60_000,
+      message: { subject: 'Synthetic initial verification',
+        body: 'https://example.test/#/verify?token=' + registerToken }
+    });
+    assert.equal(registered.email, 'atomic@example.test');
+    assert.equal((await db('email_verifications')
+      .where({ user_id: registered.id }).first()).token_hash,
+      createHash('sha256').update(registerToken).digest('hex'));
+    await assert.rejects(registerWithVerificationOutbox(db, {
+      account: { name: 'Duplicate Atomic', email: 'ATOMIC@example.test',
+        role: 'student', passwordHash: 'scrypt:synthetic-only' },
+      token: 'c'.repeat(64), expiresAt: Date.now() + 30 * 60_000,
+      message: { subject: 'Synthetic', body: 'Synthetic message' }
+    }), error => error.code === 'DUPLICATE_EMAIL');
+    assert.equal(Number((await db('email_verifications')
+      .where({ user_id: registered.id }).count({ n: '*' }).first()).n), 1);
+    assert.equal((await getPendingEmails(db)).length, 1);
+    assert.equal((await processPendingOutbox(db, {
+      send: async () => ({ messageId: 'synthetic-registration-accepted' })
+    })).sent, 1);
+    assert.equal((await getPendingEmails(db)).length, 0);
   } finally {
     await db.destroy();
   }
@@ -139,7 +168,7 @@ test('real MySQL: migrations, duplicate emails, transactional rollback and persi
   try {
     assert.equal((await findAccountByEmail(reopened, 'mysql@example.test')).name, 'MySQL Example');
     assert.equal((await getPendingEmails(reopened)).length, 0);
-    assert.equal(Number((await reopened('email_outbox').where({ status: 'sent' }).count({ n: '*' }).first()).n), 2);
+    assert.equal(Number((await reopened('email_outbox').where({ status: 'sent' }).count({ n: '*' }).first()).n), 3);
   } finally {
     await reopened.destroy();
   }
