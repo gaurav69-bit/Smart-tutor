@@ -3,11 +3,15 @@ on:
   pull_request:
     paths:
       - 'apps/api/**'
+      - 'api/**'
+      - 'tests/deployment.test.js'
       - '.github/workflows/backend-ci.yml'
   push:
     branches: [develop]
     paths:
       - 'apps/api/**'
+      - 'api/**'
+      - 'tests/deployment.test.js'
       - '.github/workflows/backend-ci.yml'
 permissions:
   contents: read
@@ -23,11 +27,13 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '22'
+          node-version: '24'
       - name: Install backend dependencies from committed lockfile
         run: npm ci --no-audit --no-fund
       - run: npm run build
       - run: npm test
+      - name: Hosted API adapter checks
+        run: node --test ../../tests/deployment.test.js
       - name: Migration and synthetic seed
         run: |
           DATABASE_FILE="$RUNNER_TEMP/st15-ci.sqlite" npm run db:migrate
@@ -44,3 +50,44 @@ jobs:
           done
           test -s "$RUNNER_TEMP/st15-health.json"
           node -e "const fs=require('node:fs'); const result=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/st15-health.json','utf8')); if(result.status!=='ok'||result.database!=='connected')process.exit(1)"
+
+  mysql-integration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root-only
+          MYSQL_DATABASE: smarttutor_test
+          MYSQL_USER: smarttutor_dev
+          MYSQL_PASSWORD: ci-development-only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-root-only"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Install backend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Real MySQL migration and persistence integration test
+        env:
+          TEST_MYSQL: '1'
+          DB_CLIENT: mysql2
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_USER: smarttutor_dev
+          DB_PASSWORD: ci-development-only
+          DB_NAME: smarttutor_test
+          DB_SSL: 'false'
+        run: node --test tests/mysql-live.test.js
