@@ -27,17 +27,17 @@ export const rolePages = {
 export default function RolePage({ role }) {
   const page = rolePages[role];
   return (
-    <div className="page role-page">
+    <div className="container page role-page">
       <p className="eyebrow">{page.title} page skeleton</p>
       <h1>{page.heading}</h1>
       <p className="intro">{page.description}</p>
       <div className="preview-banner">
-        Preview only. Role access and live account data are pending team
-        integration.
+        Workspace feature preview. Sessions, resources and messages are pending
+        team integration.
       </div>
-      <div className="card-grid">
+      <div className="role-grid">
         {page.panels.map((title) => (
-          <section className="placeholder-card" key={title}>
+          <section className="role-card" key={title}>
             <h2>{title}</h2>
             <div className="skeleton-lines" aria-hidden="true">
               <span />
