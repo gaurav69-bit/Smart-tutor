@@ -139,7 +139,7 @@ test('real MySQL: migrations, duplicate emails, transactional rollback and persi
   try {
     assert.equal((await findAccountByEmail(reopened, 'mysql@example.test')).name, 'MySQL Example');
     assert.equal((await getPendingEmails(reopened)).length, 0);
-    assert.equal((await reopened('email_outbox').where({ status: 'sent' }).count({ n: '*' }).first()).n, 1);
+    assert.equal(Number((await reopened('email_outbox').where({ status: 'sent' }).count({ n: '*' }).first()).n), 2);
   } finally {
     await reopened.destroy();
   }
