@@ -6,6 +6,7 @@ import { createDatabaseConnection } from '../src/database-connection.js';
 import { migrateMySQL } from '../src/mysql-migrations.js';
 import { createAuthPersistenceAdapters } from '../src/auth-persistence-adapters.js';
 import { createHash } from 'node:crypto';
+import { processPendingOutbox } from '../src/outbox-dispatcher.js';
 import {
   createAccount, findAccountByEmail, enqueueEmail, getPendingEmails
 } from '../src/account-store.js';
@@ -92,6 +93,22 @@ test('real MySQL: migrations, duplicate emails, transactional rollback and persi
     });
     assert.ok(id > 0);
     assert.equal((await getPendingEmails(db)).length, 1);
+    // Exercise an explicit, synthetic transport; never invoke a live provider.
+    const sent = [];
+    const drain = await processPendingOutbox(db, {
+      send: async (message) => {
+        sent.push(message);
+        return { messageId: 'mysql-synthetic-provider-acceptance' };
+      }
+    });
+    assert.equal(drain.sent, 1);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].to, 'mysql@example.test');
+    assert.equal((await getPendingEmails(db)).length, 0);
+    const attempt = await db('email_delivery_attempts')
+      .where({ email_outbox_id: id }).first();
+    assert.equal(attempt.outcome, 'sent');
+    assert.equal(attempt.provider_message_id, 'mysql-synthetic-provider-acceptance');
   } finally {
     await db.destroy();
   }
@@ -99,7 +116,8 @@ test('real MySQL: migrations, duplicate emails, transactional rollback and persi
   const reopened = createDatabaseConnection();
   try {
     assert.equal((await findAccountByEmail(reopened, 'mysql@example.test')).name, 'MySQL Example');
-    assert.equal((await getPendingEmails(reopened)).length, 1);
+    assert.equal((await getPendingEmails(reopened)).length, 0);
+    assert.equal((await reopened('email_outbox').where({ status: 'sent' }).count({ n: '*' }).first()).n, 1);
   } finally {
     await reopened.destroy();
   }

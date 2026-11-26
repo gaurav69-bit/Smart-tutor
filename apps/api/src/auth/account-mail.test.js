@@ -63,3 +63,21 @@ test('Brevo errors and missing receipts fail safely', async () => {
     await assert.rejects(send(welcomeEmail(email)), { message: 'Brevo email submission failed' });
   }
 });
+
+test('Brevo transport accepts text-only outbox messages and escapes the HTML fallback', async () => {
+  let payload;
+  const send = createBrevoMailTransport({
+    apiKey: 'test-only-key',
+    senderEmail: 'no-reply@example.test',
+    fetchImpl: async (_url, options) => {
+      payload = JSON.parse(options.body);
+      return Response.json({ messageId: 'outbox-receipt' }, { status: 201 });
+    }
+  });
+  const textContent = 'Line one\n<sample> & more';
+  assert.deepEqual(await send({ to: email, subject: 'Welcome', textContent }), {
+    messageId: 'outbox-receipt'
+  });
+  assert.equal(payload.textContent, textContent);
+  assert.equal(payload.htmlContent, '<pre>Line one\n&lt;sample&gt; &amp; more</pre>');
+});

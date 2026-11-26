@@ -125,6 +125,15 @@ export async function migrateMySQL(db) {
       if (existing.length !== migration.tables.length) {
         throw new Error('Migration recorded but expected tables are missing: ' + migration.name);
       }
+      // Migration 003 adds columns as well as tables. A recorded migration
+      // with missing state columns is drift and must not be silently accepted.
+      if (migration.name === '003_account_states_and_delivery_audit') {
+        const hasApproval = await db.schema.hasColumn('users', 'approval_status');
+        const hasVerified = await db.schema.hasColumn('users', 'email_verified_at');
+        if (!hasApproval || !hasVerified) {
+          throw new Error('Migration recorded but account state columns are missing: ' + migration.name);
+        }
+      }
       continue;
     }
     // A partially applied migration must be reviewed manually; never overwrite it.

@@ -53,3 +53,20 @@ The file `src/auth-persistence-adapters.js` exports `createAuthPersistenceAdapte
 - The outbox resend workflow (`queueVerificationResend`) is **not included yet**. It requires an approved resend cooldown, token/URL lifecycle, eligible account policy, durable outbox link construction and coordinated mail delivery to avoid falsely claiming a working endpoint.
 
 These are deliberately stand-alone adapters: PR #11 is owned by Jahid and remains unmerged. No code from PR #11 was copied into this branch, and `src/app.js` still exposes only the Week 3 sample validators. Automated tests cover the proposed DB interfaces against an isolated SQLite-backed Knex instance and, in CI, against a disposable real MySQL database.
+
+## ST-106 independent outbox dispatch infrastructure (not enabled in production)
+
+`src/outbox-dispatcher.js` exports `processPendingOutbox(knexDb, { send, limit? })`. It is **opt-in only**: no server, cron job, or route invokes it automatically, and it is not connected to Brevo or another live provider. Tests inject synthetic `send(message)` implementations. The transport must return an explicit `{ messageId: string }` to count as accepted.
+
+- It selects pending messages and atomically claims each with a conditional `status='pending' -> 'sending'` update. Only the worker that wins the claim calls the injected transport. Completion updates the outbox and inserts a `email_delivery_attempts` audit entry in one database transaction.
+- Accepted sends are marked `sent`; failures return to `pending` with a generic, credential-safe audit entry, and the attempt count increments. No provider exception is written to the database.
+- If a worker crashes after claiming a row, or a provider accepts an email but persistence of the result fails, the row remains `sending` for **manual reconciliation**. It must not be automatically requeued because the external message may already have been delivered. This protects against unintentional duplicate sends but is **not** end-to-end exactly-once delivery.
+- No backoff, cooldown, resend eligibility, max-attempt policy, automatic recovery, verification link generation, approval checks, or live delivery is claimed. Those behaviours need agreement with Gaurav and Jahid and a coordinated production worker design.
+- Separate SQLite tests cover success, failure with redacted errors, explicit retry, concurrent claims, crash-state behaviour, and validation. The real MySQL CI integration test also runs an isolated synthetic-transport dispatch and checks the durable audit.
+
+## Additional verification and security checks
+
+- `tests/database-config.test.js` tests hosted TLS verification by default, custom CA decoding, the explicit local `DB_SSL=false` exception, SQLite fallback and unsupported database clients.
+- The MySQL migration runner now detects a completed migration 003 whose required user state columns have disappeared, instead of silently accepting incomplete schema drift.
+- Unexpected Express errors are logged as a generic event; raw exception text is not printed because it may include secrets.
+- These changes do not merge or edit Jahid's auth PR, deploy a mail worker, change registration approvals, or bypass Gaurav's peer-review requirement.

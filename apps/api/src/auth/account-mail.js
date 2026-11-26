@@ -1,5 +1,10 @@
 const BREVO_URL = 'https://api.brevo.com/v3/smtp/email';
 
+function escapeHtml(value) {
+  return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
 export function verificationEmail(email, verificationUrl) {
   const url = new URL(verificationUrl);
   const localHttp = url.protocol === 'http:' &&
@@ -9,8 +14,7 @@ export function verificationEmail(email, verificationUrl) {
   }
 
   const link = url.href;
-  const htmlLink = link.replaceAll('&', '&amp;').replaceAll('"', '&quot;')
-    .replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  const htmlLink = escapeHtml(link);
   return {
     to: email,
     subject: 'Verify your Smart Tutor email',
@@ -51,7 +55,7 @@ export function createBrevoMailTransport({ apiKey, senderEmail, fetchImpl = fetc
           to: [{ email: to }],
           subject,
           textContent,
-          htmlContent
+          htmlContent: htmlContent ?? `<pre>${escapeHtml(textContent)}</pre>`
         })
       });
       if (response.status === 201) {
