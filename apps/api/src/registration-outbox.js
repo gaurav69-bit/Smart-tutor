@@ -55,7 +55,8 @@ export async function registerWithVerificationOutbox(db, {
       await trx('account_secrets').insert({ user_id: id, password_hash: passwordHash });
       await trx('account_profiles').insert({ user_id: id, bio });
       await trx('email_verifications').insert({
-        user_id: id, token_hash: fingerprint, expires_at: expiry
+        user_id: id, token_hash: fingerprint, expires_at: expiry,
+        created_at: new Date()
       });
       await trx('email_outbox').insert({
         user_id: id, recipient: email, subject, body
