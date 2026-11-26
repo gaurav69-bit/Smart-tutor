@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
+import { enqueueEmail } from './account-store.js';
 import { createAuthPersistenceAdapters } from './auth-persistence-adapters.js';
 import { registerWithVerificationOutbox } from './registration-outbox.js';
 import { createVerificationResendAdapter } from './verification-outbox-adapter.js';
 import { validateRegistrationProfile } from './auth/registration-profile.js';
 import { verifyPassword } from './auth/password.js';
 import { createVerificationToken } from './auth/verification-token.js';
-import { verificationEmail, createBrevoMailTransport } from './auth/account-mail.js';
+import { verificationEmail, welcomeEmail, createBrevoMailTransport } from './auth/account-mail.js';
 import { processPendingOutbox } from './outbox-dispatcher.js';
 
 export function createAccountRuntime(db, env = process.env, { send } = {}) {
@@ -23,9 +24,29 @@ export function createAccountRuntime(db, env = process.env, { send } = {}) {
     return { subject, body: textContent };
   };
   const dispatch = recipient => processPendingOutbox(db, { send: transport, limit: 1, recipient });
+  const persistence = createAuthPersistenceAdapters(db, { verifyPassword });
   return {
     allowedOrigin: appUrl.origin,
-    ...createAuthPersistenceAdapters(db, { verifyPassword }),
+    ...persistence,
+    async consumeVerificationToken(tokenHash) {
+      let outboxId;
+      const consumed = await persistence.consumeVerificationToken(tokenHash, {
+        async onFirstVerification(trx, account) {
+          const message = welcomeEmail(account.email);
+          outboxId = await enqueueEmail(trx, {
+            userId: account.id, recipient: message.to, subject: message.subject, body: message.textContent
+          });
+        }
+      });
+      if (consumed && outboxId !== undefined) {
+        try {
+          await processPendingOutbox(db, { send: transport, limit: 1, outboxId });
+        } catch {
+          console.error('Account email dispatch unavailable');
+        }
+      }
+      return consumed;
+    },
     validateProfileAndConsent: validateRegistrationProfile,
     async registerAccount(account, profile) {
       const { token, expiresAt } = createVerificationToken();

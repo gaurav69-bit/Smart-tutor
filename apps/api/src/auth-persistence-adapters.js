@@ -53,7 +53,7 @@ export function createAuthPersistenceAdapters(db, { verifyPassword } = {}) {
 
     // Consume token exactly once, with an expiry check and verification change
     // within one transaction. No raw token enters the database adapter.
-    async consumeVerificationToken(tokenHash) {
+    async consumeVerificationToken(tokenHash, { onFirstVerification } = {}) {
       if (typeof tokenHash !== 'string' || !/^[a-f0-9]{64}$/.test(tokenHash)) return false;
       return db.transaction(async (trx) => {
         const record = await trx('email_verifications')
@@ -64,9 +64,16 @@ export function createAuthPersistenceAdapters(db, { verifyPassword } = {}) {
           .where({ id: record.id, used_at: null })
           .update({ used_at: trx.fn.now() });
         if (consumed !== 1) return false;
-        const verified = await trx('users').where({ id: record.user_id })
+        const user = trx('users').where({ id: record.user_id });
+        const verified = await user.clone().whereNull('email_verified_at')
           .update({ email_verified_at: trx.fn.now() });
-        return verified === 1;
+        if (verified === 1) {
+          if (onFirstVerification) {
+            await onFirstVerification(trx, await user.first('id', 'email'));
+          }
+          return true;
+        }
+        return Boolean(await user.first('id'));
       });
     },
 
