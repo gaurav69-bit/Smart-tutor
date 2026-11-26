@@ -3,11 +3,15 @@ on:
   pull_request:
     paths:
       - 'apps/api/**'
+      - 'api/**'
+      - 'tests/deployment.test.js'
       - '.github/workflows/backend-ci.yml'
   push:
     branches: [develop]
     paths:
       - 'apps/api/**'
+      - 'api/**'
+      - 'tests/deployment.test.js'
       - '.github/workflows/backend-ci.yml'
 permissions:
   contents: read
@@ -23,11 +27,13 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '22'
+          node-version: '24'
       - name: Install backend dependencies from committed lockfile
         run: npm ci --no-audit --no-fund
       - run: npm run build
       - run: npm test
+      - name: Hosted API adapter checks
+        run: node --test ../../tests/deployment.test.js
       - name: Migration and synthetic seed
         run: |
           DATABASE_FILE="$RUNNER_TEMP/st15-ci.sqlite" npm run db:migrate
@@ -71,7 +77,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '22'
+          node-version: '24'
       - name: Install backend dependencies
         run: npm ci --no-audit --no-fund
       - name: Real MySQL migration and persistence integration test
