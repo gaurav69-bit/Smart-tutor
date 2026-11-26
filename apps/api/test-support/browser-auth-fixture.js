@@ -9,6 +9,7 @@ import { processPendingOutbox } from '../src/outbox-dispatcher.js';
 import { createLocalMailCapture, verificationEmail } from '../src/auth/account-mail.js';
 import { verifyPassword } from '../src/auth/password.js';
 import { createVerificationToken } from '../src/auth/verification-token.js';
+import { validateRegistrationProfile } from '../src/auth/registration-profile.js';
 
 // Used only by browser tests. The real profile, consent, approval and issuance policies remain open.
 export async function startBrowserAuthFixture(browserOrigin) {
@@ -39,9 +40,7 @@ export async function startBrowserAuthFixture(browserOrigin) {
         tokenTtlMs: 30 * 60_000,
         cooldownMs: 60_000
       }),
-      validateProfileAndConsent: ({ terms, bio }) => terms === true
-        ? { valid: true, profile: { bio } }
-        : { valid: false, errors: { terms: 'Terms must be accepted' } }
+      validateProfileAndConsent: validateRegistrationProfile
     }).listen(3001, '127.0.0.1');
     await once(server, 'listening');
   } catch (error) {

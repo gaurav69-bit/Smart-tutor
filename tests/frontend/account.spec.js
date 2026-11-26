@@ -301,6 +301,13 @@ for (const role of ["student", "tutor"]) {
       await expect(page.getByRole("status")).toContainText("not yet verified");
       await page.screenshot({ path: testInfo.outputPath("01-registration.png") });
 
+      const rejected = await page.request.post("/api/auth/register", {
+        data: { ...payload, [roleFields[0]]: "", terms: false },
+      });
+      expect(rejected.status()).toBe(400);
+      const rejection = await rejected.json();
+      expect(Object.keys(rejection.error.details).sort()).toEqual([roleFields[0], "terms"].sort());
+
       await page.goto("/#/verify");
       await page.getByLabel("Email for verification").fill(account.email);
       const resendResponse = page.waitForResponse(response =>
