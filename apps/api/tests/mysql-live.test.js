@@ -7,6 +7,7 @@ import { migrateMySQL } from '../src/mysql-migrations.js';
 import { createAuthPersistenceAdapters } from '../src/auth-persistence-adapters.js';
 import { createHash } from 'node:crypto';
 import { processPendingOutbox } from '../src/outbox-dispatcher.js';
+import { createVerificationResendAdapter } from '../src/verification-outbox-adapter.js';
 import {
   createAccount, findAccountByEmail, enqueueEmail, getPendingEmails
 } from '../src/account-store.js';
@@ -109,6 +110,27 @@ test('real MySQL: migrations, duplicate emails, transactional rollback and persi
       .where({ email_outbox_id: id }).first();
     assert.equal(attempt.outcome, 'sent');
     assert.equal(attempt.provider_message_id, 'mysql-synthetic-provider-acceptance');
+    // Approval Pending: the proposed resend persistence transaction is tested
+    // against disposable MySQL, not a live sender or hosted TiDB.
+    const resend = createVerificationResendAdapter(db, {
+      createToken: () => 'f'.repeat(64),
+      renderVerificationEmail: ({ email, token }) => ({
+        subject: 'Synthetic verification',
+        body: 'https://example.test/#/verify?token=' + token + '&email=' + email
+      }),
+      tokenTtlMs: 30 * 60 * 1000,
+      cooldownMs: 60 * 1000
+    });
+    await resend('mysql@example.test');
+    await resend('mysql@example.test');
+    assert.equal(Number((await db('email_verifications')
+      .where({ user_id: account.id }).count({ n: '*' }).first()).n), 1);
+    assert.equal((await getPendingEmails(db)).length, 1);
+    const deliveredVerification = await processPendingOutbox(db, {
+      send: async () => ({ messageId: 'synthetic-verification-accepted' })
+    });
+    assert.equal(deliveredVerification.sent, 1);
+    assert.equal((await getPendingEmails(db)).length, 0);
   } finally {
     await db.destroy();
   }
@@ -117,7 +139,7 @@ test('real MySQL: migrations, duplicate emails, transactional rollback and persi
   try {
     assert.equal((await findAccountByEmail(reopened, 'mysql@example.test')).name, 'MySQL Example');
     assert.equal((await getPendingEmails(reopened)).length, 0);
-    assert.equal((await reopened('email_outbox').where({ status: 'sent' }).count({ n: '*' }).first()).n, 1);
+    assert.equal(Number((await reopened('email_outbox').where({ status: 'sent' }).count({ n: '*' }).first()).n), 2);
   } finally {
     await reopened.destroy();
   }

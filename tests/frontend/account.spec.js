@@ -284,7 +284,7 @@ for (const role of ["student", "tutor"]) {
     page, context, baseURL,
   }, testInfo) => {
     const { startBrowserAuthFixture } = await import("../../apps/api/test-support/browser-auth-fixture.js");
-    const fixture = await startBrowserAuthFixture();
+    const fixture = await startBrowserAuthFixture(baseURL);
     try {
       // No network interception. Vite proxies the actual browser requests to Express.
       await register(page, role);
@@ -292,17 +292,41 @@ for (const role of ["student", "tutor"]) {
       await expect(page.getByRole("status")).toContainText("not yet verified");
       await page.screenshot({ path: testInfo.outputPath("01-registration.png") });
 
-      const { accountId, messages, result } = await fixture.issueVerification(account.email, baseURL);
+      await page.goto("/#/verify");
+      await page.getByLabel("Email for verification").fill(account.email);
+      const resendResponse = page.waitForResponse(response =>
+        response.url().endsWith("/api/auth/resend-verification") && response.request().method() === "POST",
+      );
+      await page.getByRole("button", { name: "Request a new link" }).click();
+      const requested = await resendResponse;
+      expect(requested.status()).toBe(202);
+      const accepted = await requested.json();
+      await expect(page.getByRole("button", { name: /Try again in/ })).toBeDisabled();
+      await page.screenshot({ path: testInfo.outputPath("02-resend-cooldown.png") });
+
+      // Repeat through HTTP to exercise server-side cooldown independently of the UI timer.
+      const resend = async email => {
+        const response = await page.request.post("/api/auth/resend-verification", { data: { email } });
+        expect(response.status()).toBe(202);
+        expect(await response.json()).toEqual(accepted);
+      };
+      await resend(account.email);
+      await resend("unknown@example.test");
+      const { messages, result } = await fixture.dispatchVerificationMail();
       expect(result.sent).toBe(1);
       expect(messages).toHaveLength(1);
       expect(messages[0].to).toBe(account.email);
       await page.goto(messages[0].textContent.split("\n")[1]);
       await page.getByRole("button", { name: "Verify my email" }).click();
-      await expect(page.getByRole("status")).toContainText("Email verified");
+      await expect(page.getByRole("status").filter({ hasText: "Email verified" })).toBeVisible();
       await expect(page).not.toHaveURL(/token=/);
-      await page.screenshot({ path: testInfo.outputPath("02-verification.png") });
+      await page.screenshot({ path: testInfo.outputPath("03-verification.png") });
 
-      expect(await fixture.approve(accountId)).toBe(true);
+      await resend(account.email);
+      const verifiedResend = await fixture.dispatchVerificationMail();
+      expect(verifiedResend.result.sent).toBe(0);
+      expect(verifiedResend.messages).toHaveLength(0);
+      expect(await fixture.approve(account.email)).toBe(true);
       await page.goto("/#/" + role);
       await expect(page).toHaveURL(/login/);
       await page.getByLabel("Email address", { exact: true }).fill(account.email);
@@ -313,7 +337,7 @@ for (const role of ["student", "tutor"]) {
       const session = cookies.find(cookie => cookie.httpOnly);
       expect(session).toBeDefined();
       expect((await page.request.get("/api/auth/me")).ok()).toBe(true);
-      await page.screenshot({ path: testInfo.outputPath("03-signed-in.png") });
+      await page.screenshot({ path: testInfo.outputPath("04-signed-in.png") });
 
       await page.getByLabel("Sign out").click();
       await expect(page.getByLabel("Sign out")).toHaveCount(0);
@@ -321,7 +345,7 @@ for (const role of ["student", "tutor"]) {
         headers: { Cookie: `${session.name}=${session.value}` },
       });
       expect(revoked.status()).toBe(401);
-      await page.screenshot({ path: testInfo.outputPath("04-signed-out.png") });
+      await page.screenshot({ path: testInfo.outputPath("05-signed-out.png") });
     } finally {
       await fixture.close();
     }

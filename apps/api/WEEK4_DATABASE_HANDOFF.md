@@ -70,3 +70,13 @@ These are deliberately stand-alone adapters: PR #11 is owned by Jahid and remain
 - The MySQL migration runner now detects a completed migration 003 whose required user state columns have disappeared, instead of silently accepting incomplete schema drift.
 - Unexpected Express errors are logged as a generic event; raw exception text is not printed because it may include secrets.
 - These changes do not merge or edit Jahid's auth PR, deploy a mail worker, change registration approvals, or bypass Gaurav's peer-review requirement.
+
+## Approval Pending — ST-106 verification resend preparation
+
+`src/verification-outbox-adapter.js` exports the opt-in `createVerificationResendAdapter(db, options)`. The caller MUST inject an approved random token generator (`createToken`), message renderer (`renderVerificationEmail`), token expiry and cooldown before the adapter can be constructed. The adapter returns one `queueVerificationResend(normalizedEmail)` function compatible with the proposed PR #11 HTTP boundary but is **not wired to the application**.
+
+For an eligible unverified account, the adapter locks the user's row on MySQL, checks the latest recorded verification issue time, and atomically stores a SHA-256 verification token digest plus the queued email. Unknown, already verified or cooldown-blocked accounts yield the same generic result. Builder failures roll back both writes. An actual API handler must still use the same generic 202 response for all eligible/ineligible accounts and enforce request rate limits. **The outbox body necessarily contains the verification URL and must be treated as sensitive application data**, protected through database access controls and retention policies.
+
+This is a policy-neutral infrastructure component, not production signup/email functionality. Pending decisions include student/tutor profile and consent schema, when the initial registration challenge is issued, allowed verification URL/base domain and token TTL, resend cooldown, delivery retry policy, session/cookie settings, live sender credentials, hosted TiDB and the actual frontend flow. Tests use only synthetic tokens and addresses. GitHub CI checks the transactional implementation on disposable SQLite and MySQL 8.4. New teammates' PRs #13 and #15 provide **separate integration demonstrations under Approval Pending**; those branches are not merged or modified here.
+
+**Approval Pending** remains the official status of ST-104 to ST-108 and PR #12 until peer review and required production/hosted verification.
