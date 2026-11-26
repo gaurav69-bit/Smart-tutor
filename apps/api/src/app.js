@@ -37,6 +37,11 @@ export function createApp(db, {
     }
   });
 
+  app.use('/api/auth', (_req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  });
+
   if (typeof checkRateLimit === 'function') {
     if (process.env.VERCEL) app.set('trust proxy', 1);
     app.use('/api/auth', async (req, res, next) => {

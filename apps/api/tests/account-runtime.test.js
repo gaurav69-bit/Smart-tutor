@@ -29,6 +29,7 @@ async function exerciseRuntime(t, db) {
         : { bio: 'Synthetic tutor', qualifications: 'Synthetic qualification' }) };
     const registered = await post('/register', payload);
     assert.equal(registered.status, 201, await registered.clone().text());
+    assert.equal(registered.headers.get('cache-control'), 'no-store');
     const { account } = await registered.json();
     const details = await db('account_registration_details').where({ user_id: account.id }).first();
     assert.equal(details.username, payload.username);
