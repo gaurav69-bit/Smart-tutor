@@ -23,7 +23,7 @@ test('real MySQL: migrations, duplicate emails, transactional rollback and persi
   const db = createDatabaseConnection();
   try {
     const applied = await migrateMySQL(db);
-    assert.deepEqual(applied, ['001_initial_schema', '002_account_identity_and_outbox', '003_account_states_and_delivery_audit']);
+    assert.deepEqual(applied, ['001_initial_schema', '002_account_identity_and_outbox', '003_account_states_and_delivery_audit', '004_registration_profiles_and_limits']);
     assert.deepEqual(await migrateMySQL(db), []);
     // Exercise the running Express health route against the actual MySQL connection.
     const server = createApp(db).listen(0, '127.0.0.1');

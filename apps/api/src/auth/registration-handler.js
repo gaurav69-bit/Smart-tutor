@@ -52,6 +52,9 @@ export function registrationHandler(registerAccount, validateProfileAndConsent) 
         }
       });
     } catch (err) {
+      if (err?.code === 'DUPLICATE_USERNAME') {
+        return res.status(409).json({ error: { code: 'DUPLICATE_USERNAME', message: 'Username already registered' } });
+      }
       if (err?.code === 'DUPLICATE_EMAIL' || err?.code === 'SQLITE_CONSTRAINT_UNIQUE') {
         return res.status(409).json({
           error: { code: 'DUPLICATE_EMAIL', message: 'Email already registered' }

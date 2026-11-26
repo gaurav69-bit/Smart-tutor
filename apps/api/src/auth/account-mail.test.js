@@ -38,7 +38,7 @@ test('Brevo transport sends the transactional email payload and returns its rece
       assert.equal(options.redirect, 'error');
       assert.equal(options.headers['api-key'], 'test-only-key');
       assert.deepEqual(JSON.parse(options.body), {
-        sender: { email: 'no-reply@example.test', name: 'Smart Tutor' },
+        sender: { email: 'no-reply@example.test', name: 'SmartTutor' },
         to: [{ email }],
         subject: mail.subject,
         textContent: mail.textContent,

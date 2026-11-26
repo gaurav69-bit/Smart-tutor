@@ -7,7 +7,8 @@
 // reconciliation; do NOT auto-requeue it (delivery may already have happened).
 export async function processPendingOutbox(db, {
   send,
-  limit = 10
+  limit = 10,
+  recipient
 } = {}) {
   if (!db || typeof db.transaction !== 'function') throw new TypeError('Knex database required');
   if (typeof send !== 'function') throw new TypeError('An explicit mail transport is required');
@@ -15,7 +16,12 @@ export async function processPendingOutbox(db, {
     throw new RangeError('Invalid outbox batch size');
   }
 
-  const pending = await db('email_outbox')
+  const query = db('email_outbox');
+  if (recipient !== undefined) {
+    if (typeof recipient !== 'string' || !recipient.trim()) throw new TypeError('Invalid recipient');
+    query.where({ recipient: recipient.trim().toLowerCase() });
+  }
+  const pending = await query
     .where({ status: 'pending' }).orderBy('id').limit(limit).select(
       'id', 'recipient', 'subject', 'body'
     );

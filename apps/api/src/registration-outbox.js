@@ -5,6 +5,7 @@
 // issuing a cryptographically random token and rendering an approved link.
 // Register + verification challenge + queued message either ALL commit or NONE.
 import { createHash } from 'node:crypto';
+import { saveRegistrationDetails } from './registration-details.js';
 
 const TOKEN_PATTERN = /^[0-9a-f]{64}$/;
 const duplicate = (error) => ['ER_DUP_ENTRY', 'SQLITE_CONSTRAINT_UNIQUE',
@@ -54,6 +55,9 @@ export async function registerWithVerificationOutbox(db, {
       const [id] = await trx('users').insert({ name, email, role });
       await trx('account_secrets').insert({ user_id: id, password_hash: passwordHash });
       await trx('account_profiles').insert({ user_id: id, bio });
+      if (validatedProfile.terms === true) {
+        await saveRegistrationDetails(trx, id, role, validatedProfile);
+      }
       await trx('email_verifications').insert({
         user_id: id,
         token_hash: fingerprint,
@@ -69,7 +73,7 @@ export async function registerWithVerificationOutbox(db, {
   } catch (error) {
     if (duplicate(error)) {
       const conflict = new Error('Email already registered');
-      conflict.code = 'DUPLICATE_EMAIL';
+      conflict.code = /username/i.test(error.message || '') ? 'DUPLICATE_USERNAME' : 'DUPLICATE_EMAIL';
       throw conflict;
     }
     throw error;

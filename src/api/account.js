@@ -5,7 +5,7 @@ const messages = {
   401: "Sign-in was not accepted. Check your details, email verification and account approval.",
   403: "This account cannot access that page.",
   404: "Account services are not connected yet. Please try again later.",
-  409: "That email address is already registered. Try signing in.",
+  409: "That email address or username is already registered. Try signing in.",
   429: "Too many requests. Please wait before trying again.",
   503: "Account services are temporarily unavailable. Please try again later.",
 };

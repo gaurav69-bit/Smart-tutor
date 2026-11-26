@@ -51,7 +51,7 @@ export function createBrevoMailTransport({ apiKey, senderEmail, fetchImpl = fetc
           accept: 'application/json'
         },
         body: JSON.stringify({
-          sender: { email: senderEmail, name: 'Smart Tutor' },
+          sender: { email: senderEmail, name: 'SmartTutor' },
           to: [{ email: to }],
           subject,
           textContent,

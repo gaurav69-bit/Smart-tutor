@@ -15,7 +15,9 @@ export function createApp(db, {
   authenticatePassword,
   persistSession,
   revokeSession,
-  lookupSession
+  lookupSession,
+  checkRateLimit,
+  allowedOrigin
 } = {}) {
   const app = express();
   app.disable('x-powered-by');
@@ -34,6 +36,28 @@ export function createApp(db, {
       res.status(503).json({ status: 'degraded', database: 'unavailable' });
     }
   });
+
+  if (typeof checkRateLimit === 'function') {
+    if (process.env.VERCEL) app.set('trust proxy', 1);
+    app.use('/api/auth', async (req, res, next) => {
+      if (req.method !== 'POST') return next();
+      // JSON and same-origin checks protect cookie mutations against cross-site forms.
+      if (!req.is('application/json') && !req.path.endsWith('/logout')) {
+        return res.status(415).json({ error: { code: 'JSON_REQUIRED', message: 'JSON required' } });
+      }
+      const origin = req.headers.origin;
+      if (origin && origin !== allowedOrigin) {
+        return res.status(403).json({ error: { code: 'INVALID_ORIGIN', message: 'Request not allowed' } });
+      }
+      const scope = req.path;
+      const allowed = await checkRateLimit(scope, req.ip || 'unknown', scope === '/register' ? 10 : 30);
+      if (!allowed) {
+        res.set('Retry-After', '900');
+        return res.status(429).json({ error: { code: 'RATE_LIMITED', message: 'Please try again later' } });
+      }
+      next();
+    });
+  }
 
   app.post('/api/auth/register', registrationHandler(registerAccount, validateProfileAndConsent));
   app.post('/api/auth/verify-email', verificationHandler(consumeVerificationToken));
