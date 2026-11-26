@@ -17,12 +17,14 @@ test('ST-104: hosted MySQL connections validate TLS by default', () => {
   assert.equal(config.connection.host, 'db.example.test');
   assert.equal(config.connection.port, 4000);
   assert.equal(config.connection.ssl.rejectUnauthorized, true);
+  assert.equal(config.connection.ssl.verifyIdentity, true);
 });
 
 test('ST-104: custom CA retains certificate verification and decodes escaped newlines', () => {
   const config = getDatabaseConfig({ ...base, DB_SSL_CA: 'BEGIN\\nTEST-CA\\nEND' });
   assert.equal(config.connection.ssl.ca, 'BEGIN\nTEST-CA\nEND');
   assert.equal(config.connection.ssl.rejectUnauthorized, true);
+  assert.equal(config.connection.ssl.verifyIdentity, true);
 });
 
 test('ST-104: TLS disables only when explicitly set to false for local development', () => {
