@@ -16,8 +16,9 @@ export function getDatabaseConfig(env = process.env) {
             ? {
                 ca: env.DB_SSL_CA.replace(/\\n/g, '\n'),
                 rejectUnauthorized: true,
+                verifyIdentity: true,
               }
-            : { rejectUnauthorized: true },
+            : { rejectUnauthorized: true, verifyIdentity: true },
       },
       pool: { min: 0, max: 10 },
     };

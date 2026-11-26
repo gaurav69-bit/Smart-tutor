@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "installCommand": "npm ci && npm ci --prefix apps/api",
-  "buildCommand": "VITE_API_MODE=live npm run build",
+  "buildCommand": "node apps/api/scripts/release-check.js && VITE_API_MODE=live npm run build",
   "outputDirectory": "dist",
   "functions": {
     "api/index.js": {

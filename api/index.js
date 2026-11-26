@@ -1,5 +1,6 @@
 import { createApp } from '../apps/api/src/app.js';
 import { migrate, openDatabase } from '../apps/api/src/db.js';
+import { createAccountRuntime } from '../apps/api/src/account-runtime.js';
 import { createDatabaseConnection } from '../apps/api/src/database-connection.js';
 
 // Reuse a connection pool across warm invocations. Schema upgrades run separately.
@@ -14,11 +15,13 @@ if (client === 'mysql2') {
     if (!process.env[key]?.trim()) throw new Error('Missing database configuration: ' + key);
   }
 }
-const db = client === 'mysql2'
+const db = client === 'mysql2' || process.env.ACCOUNTS_ENABLED === 'true'
   ? createDatabaseConnection(process.env)
   : openDatabase(':memory:');
-if (client === 'sqlite3') migrate(db);
-const app = createApp(db);
+if (client === 'sqlite3' && process.env.ACCOUNTS_ENABLED !== 'true') migrate(db);
+const accountRuntime = process.env.ACCOUNTS_ENABLED === 'true'
+  ? createAccountRuntime(db) : {};
+const app = createApp(db, accountRuntime);
 
 export default function handler(req, res) {
   const url = new URL(req.url, 'http://localhost');

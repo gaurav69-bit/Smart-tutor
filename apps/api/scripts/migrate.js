@@ -4,7 +4,7 @@ import { createDatabaseConnection } from '../src/database-connection.js';
 import { migrateMySQL } from '../src/mysql-migrations.js';
 
 const client = (process.env.DB_CLIENT || 'sqlite3').toLowerCase();
-if (client === 'mysql2') {
+if (client === 'mysql2' || (client === 'sqlite3' && process.env.ACCOUNTS_ENABLED === 'true')) {
   const db = createDatabaseConnection();
   try {
     const applied = await migrateMySQL(db);
