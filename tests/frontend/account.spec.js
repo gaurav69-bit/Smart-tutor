@@ -308,37 +308,57 @@ for (const role of ["student", "tutor"]) {
       const rejection = await rejected.json();
       expect(Object.keys(rejection.error.details).sort()).toEqual([roleFields[0], "terms"].sort());
 
-      await page.goto("/#/verify");
-      await page.getByLabel("Email for verification").fill(account.email);
-      const resendResponse = page.waitForResponse(response =>
-        response.url().endsWith("/api/auth/resend-verification") && response.request().method() === "POST",
-      );
-      await page.getByRole("button", { name: "Request a new link" }).click();
-      const requested = await resendResponse;
-      expect(requested.status()).toBe(202);
-      const accepted = await requested.json();
-      await expect(page.getByRole("button", { name: /Try again in/ })).toBeDisabled();
-      await page.screenshot({ path: testInfo.outputPath("02-resend-cooldown.png") });
+      const initial = await fixture.dispatchVerificationMail();
+      expect(initial.result.sent).toBe(1);
+      expect(initial.messages).toHaveLength(1);
+      expect(initial.messages[0].to).toBe(account.email);
+      const initialLink = initial.messages[0].textContent.split("\n")[1];
+      expect(new URL(initialLink).hash).toMatch(/^#\/verify\?token=[a-f0-9]{64}$/);
 
-      // Repeat through HTTP to exercise server-side cooldown independently of the UI timer.
-      const resend = async email => {
-        const response = await page.request.post("/api/auth/resend-verification", { data: { email } });
-        expect(response.status()).toBe(202);
-        expect(await response.json()).toEqual(accepted);
-      };
-      await resend(account.email);
-      await resend("unknown@example.test");
-      const { messages, result } = await fixture.dispatchVerificationMail();
-      expect(result.sent).toBe(1);
-      expect(messages).toHaveLength(1);
-      expect(messages[0].to).toBe(account.email);
-      await page.goto(messages[0].textContent.split("\n")[1]);
+      const duplicate = await page.request.post("/api/auth/register", { data: payload });
+      expect(duplicate.status()).toBe(409);
+      expect((await fixture.dispatchVerificationMail()).messages).toHaveLength(0);
+
+      // Verify the initial registration email for students, and the resend for tutors.
+      // The tutor test advances only the database adapter's clock to avoid a real wait.
+      let verificationLink = initialLink;
+      if (role === "tutor") {
+        fixture.advancePastResendCooldown();
+        await page.goto("/#/verify");
+        await page.getByLabel("Email for verification").fill(account.email);
+        const resendResponse = page.waitForResponse(response =>
+          response.url().endsWith("/api/auth/resend-verification") && response.request().method() === "POST",
+        );
+        await page.getByRole("button", { name: "Request a new link" }).click();
+        const requested = await resendResponse;
+        expect(requested.status()).toBe(202);
+        await expect(page.getByRole("button", { name: /Try again in/ })).toBeDisabled();
+        await page.screenshot({ path: testInfo.outputPath("02-resend-cooldown.png") });
+
+        const accepted = await requested.json();
+        for (const email of [account.email, "unknown@example.test"]) {
+          const response = await page.request.post("/api/auth/resend-verification", { data: { email } });
+          expect(response.status()).toBe(202);
+          expect(await response.json()).toEqual(accepted);
+        }
+        const { messages, result } = await fixture.dispatchVerificationMail();
+        expect(result.sent).toBe(1);
+        expect(messages).toHaveLength(1);
+        expect(messages[0].to).toBe(account.email);
+        verificationLink = messages[0].textContent.split("\n")[1];
+        expect(verificationLink).not.toBe(initialLink);
+      }
+
+      await page.goto(verificationLink);
       await page.getByRole("button", { name: "Verify my email" }).click();
       await expect(page.getByRole("status").filter({ hasText: "Email verified" })).toBeVisible();
       await expect(page).not.toHaveURL(/token=/);
       await page.screenshot({ path: testInfo.outputPath("03-verification.png") });
 
-      await resend(account.email);
+      const verifiedRequest = await page.request.post("/api/auth/resend-verification", {
+        data: { email: account.email },
+      });
+      expect(verifiedRequest.status()).toBe(202);
       const verifiedResend = await fixture.dispatchVerificationMail();
       expect(verifiedResend.result.sent).toBe(0);
       expect(verifiedResend.messages).toHaveLength(0);
