@@ -1,5 +1,6 @@
 import 'dotenv/config';
 
+import { createAccountRuntime } from './account-runtime.js';
 import { createApp } from './app.js';
 import { migrate, openDatabase } from './db.js';
 import { createDatabaseConnection } from './database-connection.js';
@@ -18,12 +19,12 @@ if (!['sqlite3', 'mysql2'].includes(client)) {
 }
 
 async function startServer() {
-  const db = useMySQL
+  const db = useMySQL || process.env.ACCOUNTS_ENABLED === 'true'
     ? createDatabaseConnection(process.env)
     : openDatabase();
 
   async function closeDatabase() {
-    if (useMySQL) {
+    if (useMySQL || process.env.ACCOUNTS_ENABLED === 'true') {
       await db.destroy();
     } else {
       db.close();
@@ -31,10 +32,10 @@ async function startServer() {
   }
 
   try {
-    if (useMySQL) {
+    if (useMySQL || process.env.ACCOUNTS_ENABLED === 'true') {
       // Check the MySQL connection before starting the server.
       await db.raw('SELECT 1 AS ok');
-      console.log('MySQL database connection ready');
+      console.log('Database connection ready');
 
       // MySQL migrations are deliberately not run automatically.
       // They must be reviewed and tested separately.
@@ -46,7 +47,8 @@ async function startServer() {
       );
     }
 
-    const server = createApp(db).listen(port, () => {
+    const runtime = process.env.ACCOUNTS_ENABLED === 'true' ? createAccountRuntime(db) : {};
+    const server = createApp(db, runtime).listen(port, () => {
       console.log(
         'SmartTutor backend listening on port ' +
         server.address().port

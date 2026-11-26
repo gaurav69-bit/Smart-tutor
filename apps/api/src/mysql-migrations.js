@@ -102,6 +102,27 @@ const migrations = [
         table.index('email_outbox_id');
       });
     }
+  },
+  {
+    name: '004_registration_profiles_and_limits',
+    tables: ['account_registration_details', 'auth_request_limits'],
+    async up(db) {
+      await db.schema.createTable('account_registration_details', table => {
+        table.integer('user_id').unsigned().primary().references('id').inTable('users').onDelete('CASCADE');
+        table.string('username', 40).notNullable().unique();
+        table.string('subject', 100).notNullable();
+        table.date('date_of_birth').nullable();
+        table.string('address', 300).nullable();
+        table.text('qualifications').nullable();
+        table.string('terms_version', 40).notNullable();
+        table.timestamp('terms_accepted_at').notNullable();
+      });
+      await db.schema.createTable('auth_request_limits', table => {
+        table.string('key_hash', 64).primary();
+        table.integer('attempts').notNullable().defaultTo(0);
+        table.bigInteger('expires_at').notNullable();
+      });
+    }
   }
 ];
 

@@ -90,4 +90,8 @@ jobs:
           DB_PASSWORD: ci-development-only
           DB_NAME: smarttutor_test
           DB_SSL: 'false'
-        run: node --test tests/mysql-live.test.js
+        run: |
+          node --test tests/mysql-live.test.js
+          node --test --test-name-pattern "disposable MySQL 8.4" tests/combined-auth-persistence.test.js
+
+          node --test --test-name-pattern "disposable MySQL" tests/account-runtime.test.js
