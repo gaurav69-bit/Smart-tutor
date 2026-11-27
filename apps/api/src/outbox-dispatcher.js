@@ -8,7 +8,8 @@
 export async function processPendingOutbox(db, {
   send,
   limit = 10,
-  recipient
+  recipient,
+  outboxId
 } = {}) {
   if (!db || typeof db.transaction !== 'function') throw new TypeError('Knex database required');
   if (typeof send !== 'function') throw new TypeError('An explicit mail transport is required');
@@ -17,6 +18,12 @@ export async function processPendingOutbox(db, {
   }
 
   const query = db('email_outbox');
+  if (outboxId !== undefined) {
+    if (!Number.isSafeInteger(outboxId) || outboxId < 1) {
+      throw new TypeError('Invalid outbox ID');
+    }
+    query.where({ id: outboxId });
+  }
   if (recipient !== undefined) {
     if (typeof recipient !== 'string' || !recipient.trim()) throw new TypeError('Invalid recipient');
     query.where({ recipient: recipient.trim().toLowerCase() });
