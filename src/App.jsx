@@ -11,24 +11,14 @@ import Footer from "./components/Footer.jsx";
 import Home from "./pages/Home.jsx";
 import Info from "./pages/Info.jsx";
 import Account, { Verify } from "./pages/Account.jsx";
+import Recovery from "./pages/Recovery.jsx";
+import Otp from "./pages/Otp.jsx";
+import Invitation from "./pages/Invitation.jsx";
+import Tutors from "./pages/Tutors.jsx";
+import Workspace from "./pages/Workspace.jsx";
 import Directory, { Contact } from "./pages/Directory.jsx";
 import RolePage from "./pages/RolePage.jsx";
-import {
-  RequireSession,
-  SessionProvider,
-  useSession,
-} from "./auth/Session.jsx";
-function Dashboard() {
-  const session = useSession();
-  return (
-    <>
-      <div className="container session-caption">
-        Signed in as {session.account.name}
-      </div>
-      <RolePage role={session.account.role} />
-    </>
-  );
-}
+import { RequireSession, SessionProvider } from "./auth/Session.jsx";
 function Layout() {
   const { pathname } = useLocation(),
     main = useRef(null);
@@ -63,11 +53,18 @@ function Layout() {
             element={<Account key="register" register />}
           />
           <Route path="/verify" element={<Verify />} />
+          <Route path="/forgot-password" element={<Recovery key="forgot" />} />
           <Route
-            path="/dashboard"
+            path="/reset-password"
+            element={<Recovery key="reset" reset />}
+          />
+          <Route path="/otp" element={<Otp />} />
+          <Route path="/accept-invitation" element={<Invitation />} />
+          <Route
+            path="/dashboard/*"
             element={
               <RequireSession>
-                <Dashboard />
+                <Workspace />
               </RequireSession>
             }
           />
@@ -85,16 +82,13 @@ function Layout() {
           <Route
             path="/admin"
             element={
-              <div className="container page">
-                <h1>Administrator access</h1>
-                <p>
-                  Public administrator registration and administrator sessions
-                  are not available in the current shared account service.
-                </p>
-              </div>
+              <RequireSession role="admin">
+                <Navigate to="/dashboard/users" replace />
+              </RequireSession>
             }
           />
-          <Route path="/tutors/*" element={<Directory />} />
+          <Route path="/tutors" element={<Tutors />} />
+          <Route path="/tutors/:id" element={<Tutors />} />
           <Route path="/tutorials" element={<Directory />} />
           <Route path="/contact" element={<Contact />} />
           <Route

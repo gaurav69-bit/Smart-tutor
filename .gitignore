@@ -9,4 +9,5 @@ apps/api/data/
 *.sqlite-shm
 *.sqlite-wal
 test-results/
+test-results-*/
 playwright-report/

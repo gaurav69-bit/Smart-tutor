@@ -17,7 +17,21 @@ export function SessionProvider({ children }) {
     error: "",
   });
   const generation = useRef(0);
+  const pendingOtp = useRef(false);
+  const authOperation = useRef(0);
+  const [challenge, setChallenge] = useState(null);
+  const updateAccountName = useCallback((id, name) => {
+    if (typeof name !== "string" || !name.trim()) return;
+    setState((previous) =>
+      previous.account &&
+      String(previous.account.id) === String(id) &&
+      previous.account.name !== name
+        ? { ...previous, account: { ...previous.account, name } }
+        : previous,
+    );
+  }, []);
   const refresh = useCallback(async (signal) => {
+    if (pendingOtp.current) return;
     const current = ++generation.current;
     setState({ status: "loading", account: null, error: "" });
     try {
@@ -47,32 +61,115 @@ export function SessionProvider({ children }) {
       window.removeEventListener("focus", update);
     };
   }, [refresh]);
-  const login = async (email, password) => {
-    ++generation.current;
-    const loggedIn = safeAccount(
-      await accountRequest("login", { email, password }),
-    );
-    // The session cookie must work independently; a successful POST alone is insufficient.
+  async function confirmLogin(result, operation, fromOtp = false) {
+    const loggedIn = safeAccount(result);
+    if (loggedIn.role === "admin" && !fromOtp)
+      throw new Error(
+        "Account services returned an unexpected administrator sign-in response. Complete the security-code flow.",
+      );
     const account = safeAccount(await accountRequest("me"));
     if (account.id !== loggedIn.id || account.role !== loggedIn.role)
       throw new Error(
         "Your session could not be confirmed. Please try signing in again.",
       );
-    // A focus refresh may have started while login was in flight.
-    // Its earlier session snapshot must not overwrite this confirmed account.
+    if (operation !== authOperation.current)
+      throw new Error("The sign-in attempt changed. Please start again.");
     ++generation.current;
     setState({ status: "authenticated", account, error: "" });
+    pendingOtp.current = false;
+    setChallenge(null);
     return account;
+  }
+  const login = async (email, password, captcha) => {
+    const operation = ++authOperation.current;
+    ++generation.current;
+    const result = await accountRequest("login", {
+      email,
+      password,
+      ...(captcha ? { captcha } : {}),
+    });
+    if (operation !== authOperation.current)
+      throw new Error("The sign-in attempt changed. Please start again.");
+    if (result?.otpRequired === true) {
+      pendingOtp.current = true;
+      const expiresIn =
+        Number.isInteger(result.expiresIn) &&
+        result.expiresIn > 0 &&
+        result.expiresIn <= 3600
+          ? result.expiresIn
+          : 300;
+      setChallenge({
+        email,
+        expiresAt: Date.now() + expiresIn * 1000,
+        resendAt: Date.now() + 60000,
+      });
+      ++generation.current;
+      setState({ status: "anonymous", account: null, error: "" });
+      return { otpRequired: true };
+    }
+    // The session cookie must work independently; a successful POST alone is insufficient.
+    return confirmLogin(result, operation);
+  };
+  const verifyOtp = async (code, captcha) => {
+    if (!challenge || Date.now() >= challenge.expiresAt)
+      throw new Error("This code has expired. Request another code.");
+    const operation = ++authOperation.current;
+    return confirmLogin(
+      await accountRequest("otp", {
+        email: challenge.email,
+        code,
+        ...(captcha ? { captcha } : {}),
+      }),
+      operation,
+      true,
+    );
+  };
+  const resendOtp = async (captcha) => {
+    if (!challenge) throw new Error("Start again from sign in.");
+    const result = await accountRequest("resend-otp", {
+      email: challenge.email,
+      ...(captcha ? { captcha } : {}),
+    });
+    if (typeof result?.message !== "string")
+      throw new Error("Account services returned an unexpected response.");
+    if (
+      Number.isInteger(result.expiresIn) &&
+      result.expiresIn > 0 &&
+      result.expiresIn <= 3600
+    )
+      setChallenge({
+        ...challenge,
+        expiresAt: Date.now() + result.expiresIn * 1000,
+      });
   };
   const logout = async () => {
+    ++authOperation.current;
     ++generation.current;
     await accountRequest("logout", {});
     // Invalidate any session snapshot requested while logout was in flight.
     ++generation.current;
     setState({ status: "anonymous", account: null, error: "" });
+    setChallenge(null);
+    pendingOtp.current = false;
   };
   return (
-    <Session.Provider value={{ ...state, refresh, login, logout }}>
+    <Session.Provider
+      value={{
+        ...state,
+        refresh,
+        login,
+        logout,
+        challenge,
+        verifyOtp,
+        resendOtp,
+        updateAccountName,
+        cancelChallenge: () => {
+          ++authOperation.current;
+          pendingOtp.current = false;
+          setChallenge(null);
+        },
+      }}
+    >
       {children}
     </Session.Provider>
   );

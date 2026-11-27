@@ -11,8 +11,9 @@ import {
 import { BookOpen } from "lucide-react";
 import { accountRequest, safeAccount, AccountError } from "../api/account.js";
 import { useSession } from "../auth/Session.jsx";
+import Captcha, { captchaSiteKey } from "../components/Captcha.jsx";
 const tokenPattern = /^[a-f0-9]{64}$/;
-function Feedback({ error, message }) {
+export function Feedback({ error, message }) {
   const ref = useRef(null);
   useEffect(() => {
     if (error || message) ref.current?.focus();
@@ -27,7 +28,7 @@ function Feedback({ error, message }) {
     </div>
   ) : null;
 }
-function Field({ label, error, ...props }) {
+export function Field({ label, error, ...props }) {
   const id = `account-${props.name}`;
   return (
     <label htmlFor={id}>
@@ -55,10 +56,13 @@ export default function Account({ register = false }) {
     [error, setError] = useState(""),
     [details, setDetails] = useState({}),
     [created, setCreated] = useState(false);
+  const [captcha, setCaptcha] = useState(""),
+    [captchaReset, setCaptchaReset] = useState(0);
   useEffect(() => {
     setError("");
     setDetails({});
     setCreated(false);
+    if (!register) session.cancelChallenge();
   }, [register]);
   async function submit(event) {
     event.preventDefault();
@@ -66,6 +70,10 @@ export default function Account({ register = false }) {
     const values = Object.fromEntries(new FormData(form));
     setError("");
     setDetails({});
+    if (captchaSiteKey && !captcha) {
+      setError("Complete the security check before continuing.");
+      return;
+    }
     const invalid = {};
     if (register) {
       if (
@@ -94,13 +102,18 @@ export default function Account({ register = false }) {
           email,
           role,
           terms: profile.terms === "on",
+          ...(captcha ? { captcha } : {}),
         });
         safeAccount(result, { registration: true });
         form.reset();
         setCreated(true);
       } else {
-        const account = await session.login(email, values.password);
+        const account = await session.login(email, values.password, captcha);
         form.reset();
+        if (account.otpRequired) {
+          navigate("/otp");
+          return;
+        }
         const from = location.state?.from;
         // Only local, explicitly permitted role destinations are restored.
         navigate(
@@ -118,6 +131,7 @@ export default function Account({ register = false }) {
       });
     } finally {
       setBusy(false);
+      setCaptchaReset((value) => value + 1);
     }
   }
   return (
@@ -240,6 +254,11 @@ export default function Account({ register = false }) {
                 required
                 error={details.password}
               />
+              {!register && (
+                <Link className="forgot" to="/forgot-password">
+                  Forgot password?
+                </Link>
+              )}
               {register && (
                 <>
                   <Field
@@ -322,6 +341,11 @@ export default function Account({ register = false }) {
                   )}
                 </>
               )}
+              <Captcha
+                action={register ? "register" : "login"}
+                onToken={setCaptcha}
+                reset={captchaReset}
+              />
               <button className="btn" type="submit">
                 {busy
                   ? "Just a moment…"
@@ -346,6 +370,11 @@ export default function Account({ register = false }) {
         {!register && (
           <div className="auth-switch">
             <Link to="/verify">Need to verify your email?</Link>
+            <p>
+              <Link to="/accept-invitation">
+                Have an administrator invitation?
+              </Link>
+            </p>
           </div>
         )}
         <p className="dev-note">

@@ -1,4 +1,4 @@
-name: ST-23 Frontend browser checks
+name: SmartTutor frontend browser checks
 on:
   pull_request:
     paths:
@@ -28,9 +28,14 @@ jobs:
       - run: npm run test:frontend
         env:
           VITE_API_PROXY_TARGET: http://127.0.0.1:3001
+      - run: npm run test:frontend -- tests/frontend/captcha-configured.spec.js --output=test-results-captcha
+        env:
+          VITE_TURNSTILE_SITE_KEY: synthetic-public-key
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: st23-browser-evidence
-          path: test-results/
+          path: |
+            test-results/
+            test-results-captcha/
           retention-days: 7
