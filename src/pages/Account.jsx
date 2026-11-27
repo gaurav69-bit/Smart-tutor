@@ -12,7 +12,7 @@ import { BookOpen } from "lucide-react";
 import { accountRequest, safeAccount, AccountError } from "../api/account.js";
 import { useSession } from "../auth/Session.jsx";
 const tokenPattern = /^[a-f0-9]{64}$/;
-function Feedback({ error, message }) {
+export function Feedback({ error, message }) {
   const ref = useRef(null);
   useEffect(() => {
     if (error || message) ref.current?.focus();
@@ -27,7 +27,7 @@ function Feedback({ error, message }) {
     </div>
   ) : null;
 }
-function Field({ label, error, ...props }) {
+export function Field({ label, error, ...props }) {
   const id = `account-${props.name}`;
   return (
     <label htmlFor={id}>
@@ -240,6 +240,11 @@ export default function Account({ register = false }) {
                 required
                 error={details.password}
               />
+              {!register && (
+                <Link className="forgot" to="/forgot-password">
+                  Forgot password?
+                </Link>
+              )}
               {register && (
                 <>
                   <Field

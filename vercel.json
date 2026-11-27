@@ -5,7 +5,8 @@
     "deploymentEnabled": {
       "integration/week-4-welcome": false,
       "fix/ST-23-account-review": false,
-      "integration/ST-70-student-release": false
+      "integration/ST-70-student-release": false,
+      "fix/ST-144-password-recovery": false
     }
   },
   "installCommand": "npm ci && npm ci --prefix apps/api",

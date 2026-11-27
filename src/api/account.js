@@ -44,6 +44,10 @@ export async function accountRequest(path, body, { signal } = {}) {
     login: 200,
     me: 200,
     logout: 204,
+    // Recovery paths/statuses follow the attributed design reference.
+    // The shared backend still needs ST-10 integration; see ST-144 PR.
+    forgot: 200,
+    reset: 200,
   }[path];
   if (response.ok && response.status !== expectedStatus)
     throw new AccountError(

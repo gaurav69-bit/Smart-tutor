@@ -11,6 +11,7 @@ import Footer from "./components/Footer.jsx";
 import Home from "./pages/Home.jsx";
 import Info from "./pages/Info.jsx";
 import Account, { Verify } from "./pages/Account.jsx";
+import Recovery from "./pages/Recovery.jsx";
 import Directory, { Contact } from "./pages/Directory.jsx";
 import RolePage from "./pages/RolePage.jsx";
 import {
@@ -63,6 +64,8 @@ function Layout() {
             element={<Account key="register" register />}
           />
           <Route path="/verify" element={<Verify />} />
+          <Route path="/forgot-password" element={<Recovery key="forgot" />} />
+          <Route path="/reset-password" element={<Recovery key="reset" reset />} />
           <Route
             path="/dashboard"
             element={
