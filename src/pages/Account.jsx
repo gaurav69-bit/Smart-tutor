@@ -250,20 +250,18 @@ export default function Account({ register = false }) {
                     required
                     error={details.confirm}
                   />
-                  <label htmlFor="account-subject">
-                    Subject
-                    <input
-                      id="account-subject"
-                      name="subject"
-                      maxLength={100}
-                      placeholder={
-                        role === "student"
-                          ? "What would you like to learn?"
-                          : "What do you teach?"
-                      }
-                      required
-                    />
-                  </label>
+                  <Field
+                    label="Subject"
+                    name="subject"
+                    maxLength={100}
+                    placeholder={
+                      role === "student"
+                        ? "What would you like to learn?"
+                        : "What do you teach?"
+                    }
+                    required
+                    error={details.subject}
+                  />
                   {role === "student" ? (
                     <>
                       <Field
@@ -300,9 +298,14 @@ export default function Account({ register = false }) {
                           maxLength={2000}
                           required
                           aria-invalid={!!details.bio}
+                          aria-describedby={
+                            details.bio ? "account-bio-error" : undefined
+                          }
                         />
                         {details.bio && (
-                          <span className="field-error">{details.bio}</span>
+                          <span className="field-error" id="account-bio-error">
+                            {details.bio}
+                          </span>
                         )}
                       </label>
                     </>

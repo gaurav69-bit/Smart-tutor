@@ -58,12 +58,17 @@ export function SessionProvider({ children }) {
       throw new Error(
         "Your session could not be confirmed. Please try signing in again.",
       );
+    // A focus refresh may have started while login was in flight.
+    // Its earlier session snapshot must not overwrite this confirmed account.
+    ++generation.current;
     setState({ status: "authenticated", account, error: "" });
     return account;
   };
   const logout = async () => {
     ++generation.current;
     await accountRequest("logout", {});
+    // Invalidate any session snapshot requested while logout was in flight.
+    ++generation.current;
     setState({ status: "anonymous", account: null, error: "" });
   };
   return (

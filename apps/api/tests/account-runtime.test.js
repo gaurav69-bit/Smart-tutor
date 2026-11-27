@@ -6,6 +6,7 @@ import { createAccountRuntime } from '../src/account-runtime.js';
 import { createApp } from '../src/app.js';
 import { migrateMySQL } from '../src/mysql-migrations.js';
 import { createDatabaseConnection } from '../src/database-connection.js';
+import { createVerificationToken } from '../src/auth/verification-token.js';
 import { setAccountApproval } from '../src/account-store.js';
 
 async function exerciseRuntime(t, db) {
@@ -38,10 +39,22 @@ async function exerciseRuntime(t, db) {
     assert.ok(details.terms_accepted_at);
     assert.equal(details.address, role === 'student' ? payload.address : null);
     assert.equal(details.qualifications, role === 'tutor' ? payload.qualifications : null);
-    assert.equal(messages.length, i + 1);
-    const token = messages[i].textContent.match(/token=([a-f0-9]{64})/)[1];
+    assert.equal(messages.length, i * 2 + 1);
+    const token = messages.at(-1).textContent.match(/token=([a-f0-9]{64})/)[1];
     assert.equal((await post('/verify-email', { token })).status, 200);
+    assert.equal(messages.length, (i + 1) * 2);
+    assert.equal(messages.at(-1).to, payload.email);
+    assert.equal(messages.at(-1).subject, 'Welcome to Smart Tutor');
+    const welcome = await db('email_outbox')
+      .where({ user_id: account.id, subject: 'Welcome to Smart Tutor' }).first();
+    assert.equal(welcome.status, 'sent');
     assert.equal((await post('/verify-email', { token })).status, 400);
+    const second = createVerificationToken();
+    await db('email_verifications').insert({
+      user_id: account.id, token_hash: second.tokenHash, expires_at: new Date(second.expiresAt)
+    });
+    assert.equal((await post('/verify-email', { token: second.token })).status, 200);
+    assert.equal(messages.length, (i + 1) * 2);
     assert.equal((await post('/login', payload)).status, 401);
     // Approval is an explicit action for a synthetic test account, never auto-approval.
     await setAccountApproval(db, account.id, 'approved');
@@ -56,7 +69,7 @@ async function exerciseRuntime(t, db) {
     const duplicate = await post('/register', { ...payload, email: `other-${role}@example.test` });
     assert.equal(duplicate.status, 409);
     assert.equal((await duplicate.json()).error.code, 'DUPLICATE_USERNAME');
-    assert.equal(messages.length, i + 1);
+    assert.equal(messages.length, (i + 1) * 2);
   }
   assert.equal((await post('/login', {}, { origin: 'https://untrusted.example.test' })).status, 403);
   assert.equal((await post('/login', {}, { origin: env.APP_URL })).status, 400);
