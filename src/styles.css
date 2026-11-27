@@ -1365,3 +1365,51 @@ nav a.active {
   vertical-align: middle;
   flex-shrink: 0;
 }
+
+/* Week 5 scoped layouts, adapted from Gaurav Aryal's reference at 3a9f2bf. */
+.search-toolbar { display: flex; align-items: center; gap: 14px; padding: 12px 18px; border: 1px solid var(--line); background: white; border-radius: 8px; margin: 30px 0 20px; }
+.search-toolbar input { margin: 0; flex: 1; border: 0; min-width: 0; }
+.search-toolbar .btn { flex-shrink: 0; }
+.filter-row { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 25px; }
+.filter-row label { min-width: 180px; }
+.profile-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 25px; margin-top: 25px; align-items: start; }
+.avatar-photo { object-fit: cover; }
+.tutor-title h2 { font-size: 18px; margin-bottom: 7px; }
+.tutor-card p, .list-item, .account-state { overflow-wrap: anywhere; }
+.list-item { border-bottom: 1px solid var(--line); padding: 16px 0; }
+.portal { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 36px; padding-block: 40px 70px; align-items: start; }
+.sidebar { border: 1px solid var(--line); border-radius: 9px; background: white; padding: 22px 15px; }
+.sidebar-person { display: flex; gap: 12px; align-items: center; padding: 0 6px 20px; border-bottom: 1px solid var(--line); }
+.sidebar-person small { display: block; color: var(--muted); margin-top: 5px; }
+.sidebar nav { display: flex; flex-direction: column; gap: 7px; margin-top: 18px; }
+.sidebar nav a { padding: 12px; display: flex; gap: 10px; align-items: center; border-radius: 5px; }
+.sidebar nav a.active { background: #e8efdf; color: var(--green); }
+.portal-main { min-width: 0; }
+.portal-main > .container { width: 100%; padding: 0; }
+.portal-main h1 { font-size: 38px; margin-bottom: 22px; }
+.portal-main p { line-height: 1.8; }
+.portal-main .panel { min-width: 0; }
+.portal-main select[multiple] { min-height: 110px; }
+.row-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.management-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.table-wrap { overflow-x: auto; }
+.table-wrap table { width: 100%; min-width: 640px; border-collapse: collapse; text-align: left; }
+.table-wrap caption { text-align: left; padding-bottom: 20px; font-size: 20px; }
+.table-wrap th, .table-wrap td { padding: 15px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.table-wrap td small { display: block; margin-top: 6px; }
+.identity-dialog { width: min(520px, calc(100% - 30px)); max-height: calc(100dvh - 40px); overflow: auto; color: #233e38; border: 1px solid var(--line); }
+.identity-dialog::backdrop { background: #173f3577; }
+.identity-dialog h2 { margin-top: 25px; }
+.captcha-check { margin-block: 15px; max-width: 100%; }
+.captcha-check .muted { font-size: 11px; line-height: 1.6; }
+@media (max-width: 1050px) { .portal { grid-template-columns: 185px minmax(0, 1fr); gap: 22px; } }
+@media (max-width: 760px) {
+  .profile-grid, .portal, .management-grid { grid-template-columns: 1fr; }
+  .portal { padding-top: 25px; }
+  .sidebar nav { flex-direction: row; flex-wrap: wrap; }
+  .sidebar nav a { padding: 10px 7px; font-size: 12px; }
+  .portal-main h1 { font-size: 34px; }
+  .search-toolbar { flex-wrap: wrap; }
+  .search-toolbar input { flex-basis: calc(100% - 50px); }
+}
+.portal .spaced, .row-actions.spaced, button.spaced { margin-top: 24px; }
