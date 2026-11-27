@@ -1,0 +1,17 @@
+/* Unmodified Google Fonts variable fonts at 5026800714d07231937d92eb4cceabf06e05d74e.
+   https://github.com/google/fonts/tree/5026800714d07231937d92eb4cceabf06e05d74e/ofl
+   Copyright and SIL Open Font License notices accompany each font. */
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url("/fonts/dm-sans.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Manrope";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("/fonts/manrope.ttf") format("truetype");
+}
