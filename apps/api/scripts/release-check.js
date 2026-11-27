@@ -1,17 +1,30 @@
 // Explicit deployment-owner operations. Ordinary builds never change the database.
 import { createDatabaseConnection } from '../src/database-connection.js';
 import { migrateMySQL } from '../src/mysql-migrations.js';
+import { checkHostedDatabase } from './check-hosted-database.js';
+import { getDatabaseConfig } from '../src/database-config.js';
 
 const action = process.env.RELEASE_ACTION;
 if (action) {
-  if (!['migrate', 'approve-test', 'verify-persistence'].includes(action)) {
+  if (!['migrate', 'approve-test', 'verify-persistence', 'verify-database'].includes(action)) {
     throw new Error('Unsupported release action');
   }
   if (process.env.DB_CLIENT !== 'mysql2' || process.env.DB_SSL === 'false') {
     throw new Error('Release checks require hosted MySQL with verified TLS');
   }
+  if (action === 'verify-database') {
+    if (process.env.DB_NAME !== 'smarttutor' || process.env.DB_HOST !== 'gateway01.ap-northeast-1.prod.aws.tidbcloud.com') {
+      throw new Error('Approved SmartTutor TiDB instance required');
+    }
+    const tls = getDatabaseConfig().connection.ssl;
+    if (!tls?.rejectUnauthorized || !tls.verifyIdentity) throw new Error('Verified database TLS required');
+  }
   const db = createDatabaseConnection();
   try {
+    if (action === 'verify-database') {
+      const results = await checkHostedDatabase(db);
+      console.log('Hosted TiDB acceptance:', JSON.stringify(results));
+    }
     if (action === 'migrate') {
       const applied = await migrateMySQL(db);
       console.log('Release schema check passed; migrations applied:', applied.length);
