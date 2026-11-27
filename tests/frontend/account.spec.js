@@ -69,6 +69,7 @@ for (const width of [390, 768, 1440])
     ]) {
       await page.goto("/#" + path);
       await expect(page.locator("h1")).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
       await expect(page.locator("footer")).toBeVisible();
       expect(
         await page.evaluate(

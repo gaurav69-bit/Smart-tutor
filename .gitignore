@@ -10,3 +10,6 @@ apps/api/data/
 *.sqlite-wal
 test-results/
 playwright-report/
+
+.st23-reference/
+test-results-*/

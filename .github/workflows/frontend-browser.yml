@@ -2,6 +2,7 @@ name: ST-23 Frontend browser checks
 on:
   pull_request:
     paths:
+      - "scripts/st23-visual-review.mjs"
       - "src/**"
       - "package*.json"
       - "playwright.config.js"
@@ -28,9 +29,24 @@ jobs:
       - run: npm run test:frontend
         env:
           VITE_API_PROXY_TARGET: http://127.0.0.1:3001
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        if: github.head_ref == 'fix/ST-23-public-review'
+        with:
+          repository: aryalgaurav365-tech/ICT301-project-2-Smart-tutor-
+          ref: 3a9f2bf618d10ef8d03df9e18e00b801b69c83f5
+          path: .st23-reference
+          persist-credentials: false
+      - run: npm ci --prefix .st23-reference --workspace @smarttutor/web --include-workspace-root=false --no-audit --no-fund
+        if: github.head_ref == 'fix/ST-23-public-review'
+      - run: node scripts/st23-visual-review.mjs
+        if: github.head_ref == 'fix/ST-23-public-review'
+        env:
+          SMARTTUTOR_REFERENCE_DIR: ${{ github.workspace }}/.st23-reference
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: st23-browser-evidence
-          path: test-results/
+          path: |
+            test-results/
+            test-results-visual/
           retention-days: 7

@@ -8,15 +8,15 @@ export default function Info() {
   const data = {
     "/about": [
       "A little guidance. A world of possibility.",
-      "SmartTutor brings students, tutors, and human encouragement together. Built as a Group D KOI capstone project, our purpose is to make academic support simpler to find and coordinate. This development version contains illustrative profiles and no claimed accreditation.",
+      "SmartTutor is a Group D KOI capstone project bringing students and tutors together. The current release supports student and tutor registration, email verification and account sign-in. Tutor discovery, learning resources and booking features are being developed in later project increments. No tutor accreditation or endorsement is claimed.",
     ],
     "/privacy": [
       "Your learning. Your privacy.",
-      "Development notice, pending operator review: we store account details, hashed passwords, verification records, sessions, messages, views and contact enquiries to operate the service. Date of birth and address are private. Reviews display the student name publicly. Do not enter real or sensitive data in this demo. Retention, age/guardian policy, operator contacts and data-request procedures must be finalized before launch.",
+      "Project privacy notice, pending operator approval: the account service handles names, usernames, email addresses, subject information and recorded terms consent. Student registration also collects date of birth and address; tutor registration collects qualifications and a teaching biography. Passwords are hashed, and verification, account-email and session records support account access. A session cookie keeps signed-in requests associated with the account. Student birth dates and addresses are not public profile information. Messaging, public reviews and contact enquiries are not available in this release. Retention periods, age/guardian rules, operator contact details and data-request procedures still require approval. Use synthetic test details while those decisions remain open.",
     ],
     "/terms": [
       "A shared space. A little respect.",
-      "Development terms, pending review: share only content you have permission to use. A request becomes a booking only when an administrator assigns it. Contact admin for cancellations. Sessions take place outside the platform. No payments are processed. Tutor credential verification is the operator’s responsibility.",
+      "Project terms, pending operator approval: this release provides account registration, verification and sign-in. Keep account credentials private and use synthetic details for project demonstrations. Tutor discovery, bookings, shared learning resources and reviews are not available yet; account registration does not confirm a tutoring session or endorse a tutor’s qualifications. No payments are processed. Service rules, operator contact details and final terms must be approved before public use.",
     ],
   }[page];
   return (
