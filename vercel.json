@@ -23,5 +23,10 @@
   ],
   "regions": [
     "hnd1"
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "fix/ST-23-account-review": false
+    }
+  }
 }
